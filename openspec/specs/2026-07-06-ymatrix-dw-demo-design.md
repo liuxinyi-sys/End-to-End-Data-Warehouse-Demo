@@ -625,49 +625,70 @@ Dashboard JSON 预生成放入 `grafana/dashboards/`，容器启动自动加载�
 ---
 
 ## 8. Docker Compose
-### 8.1 镜像构建说明（B1 修复）
+### 8.1 镜像构建说明（B1 更新：Ubuntu .deb）
 
-YMatrix 社区版从官网下载。Dockerfile:
+YMatrix 社区版（v5.2.1）以 .deb 包形式提供。
 
 ```dockerfile
-FROM centos:7
-COPY ymatrix-6.x-community.el7.x86_64.rpm /tmp/
-RUN yum install -y /tmp/ymatrix-6.x-community.el7.x86_64.rpm && yum clean all
+FROM ubuntu:20.04
+COPY matrixdb5_5.2.1+community-1_amd64.deb /tmp/
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y         /tmp/matrixdb5_5.2.1+community-1_amd64.deb &&     rm -f /tmp/matrixdb5_5.2.1+community-1_amd64.deb &&     apt-get clean &&     rm -rf /var/lib/apt/lists/* &&     chmod +x /docker-entrypoint.sh
 EXPOSE 5432 8090
+ENTRYPOINT ["/docker-entrypoint.sh"]
+```
+
+MD5 校验（下载后验证完整性）:
+```bash
+certutil -hashfile ymatrix/matrixdb5_5.2.1+community-1_amd64.deb MD5
+# 期望值: 4e4ac2df9792d1ef91628525f4f30614
 ```
 
 ```yaml
 services:
   mysql:
     image: mysql:8.0
-    ports: ["3306:3306"]
-    volumes: ["./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql"]
+    ports:
+      - "3306:3306"
+    volumes:
+      - "./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql"
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: ecommerce
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-uroot", "-proot", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   ymatrix:
     build:
       context: ./ymatrix
       dockerfile: Dockerfile
-    ports: ["5432:5432", "8090:8090"]
+    ports:
+      - "5432:5432"
+      - "8090:8090"
     volumes:
       - "./ymatrix/init:/docker-entrypoint-initdb.d"
-      - ym-data:/var/lib/ymatrix
+      - ym-data:/var/lib/matrixdb
     environment:
-      YMATRIX_DB: dw_demo
-      YMATRIX_USER: mxadmin
-volumes:
-  ym-data:
+      MATRIXDB_DB: dw_demo
+      MATRIXDB_USER: mxadmin
+      PGPORT: 5432
 
   grafana:
     image: grafana/grafana:latest
-    ports: ["3000:3000"]
-    volumes: [
-      "./grafana/datasources:/etc/grafana/provisioning/datasources",
-      "./grafana/dashboards:/etc/grafana/provisioning/dashboards",
-    ]
-    depends_on: [ymatrix]
+    ports:
+      - "3000:3000"
+    volumes:
+      - "./grafana/datasources:/etc/grafana/provisioning/datasources"
+      - "./grafana/dashboards:/etc/grafana/provisioning/dashboards"
+    depends_on:
+      ymatrix:
+        condition: service_started
+
+volumes:
+  ym-data:
 ```
 
 ---
@@ -681,6 +702,8 @@ D:\End-to-End-Data-Warehouse-Demo\
 ├── README.md
 ├── report.md
 ├── ai_usage.md
+├── docs/
+│   └── supplementary.md
 │
 ├── mysql/
 │   └── init.sql                   # 建表 + 种子数据
@@ -791,6 +814,7 @@ psycopg2-binary>=2.9.0
 | time_bucket | 改用 date_trunc | M5: DATE 类型无需 time_bucket |
 | DIM 刷新策略 | TRUNCATE + mxgate | S4: 维表<1000行，全量刷新最简单可靠 |
 | ETL 幂等性 | TRUNCATE + REFRESH | E1: 可安全重跑，不重复不丢数据 |
+| Docker base | ubuntu:20.04 + .deb 包 | B1 更新: 使用 matrixdb5_5.2.1 社区版 .deb 安装 |
 | dim_user 数据源 | 从 ODS ods_users 去重后写入 | M3: 统一 ETL 管线，无需额外 MySQL 直读 |
 | 清洗规则 | transform.py 定义完整规则 | E3: 空值/类型/衍生字段全覆盖 |
 | ODS->DWD SQL | load_dwd.py 定义完整 JOIN | E4: 字段映射 + 清洗条件 + 关联关系 |

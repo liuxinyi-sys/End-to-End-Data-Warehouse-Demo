@@ -1,0 +1,44 @@
+services:
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    volumes:
+      - "./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ecommerce
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-uroot", "-proot", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ymatrix:
+    build:
+      context: ./ymatrix
+      dockerfile: Dockerfile
+    ports:
+      - "5432:5432"
+      - "8090:8090"
+    volumes:
+      - "./ymatrix/init:/docker-entrypoint-initdb.d"
+      - ym-data:/var/lib/matrixdb
+    environment:
+      MATRIXDB_DB: dw_demo
+      MATRIXDB_USER: mxadmin
+      PGPORT: 5432
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - "./grafana/datasources:/etc/grafana/provisioning/datasources"
+      - "./grafana/dashboards:/etc/grafana/provisioning/dashboards"
+    depends_on:
+      ymatrix:
+        condition: service_started
+
+volumes:
+  ym-data:
