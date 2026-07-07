@@ -1,29 +1,39 @@
 #!/bin/bash
 set -e
 
-if [ -d /opt/matrixdb ]; then MATRIXDB_HOME=/opt/matrixdb
-elif [ -d /usr/local/matrixdb ]; then MATRIXDB_HOME=/usr/local/matrixdb
-elif [ -d /usr/lib/matrixdb ]; then MATRIXDB_HOME=/usr/lib/matrixdb
-else MATRIXDB_HOME=$(ls -d /opt/*matrix* /usr/local/*matrix* /usr/lib/*matrix* 2>/dev/null | head -1); fi
+# 启动 SSH（Greenplum 需要）
+/usr/sbin/sshd || true
 
-if [ -z "$MATRIXDB_HOME" ]; then echo "MatrixDB not found"; exit 1; fi
-export PATH=$MATRIXDB_HOME/bin:$PATH
-export PGDATA=${PGDATA:-$MATRIXDB_HOME/data}
-export PGPORT=${PGPORT:-5432}
+# 加载环境
+source /opt/ymatrix/matrixdb5/greenplum_path.sh
+export MASTER_DATA_DIRECTORY=/data/master/gpseg-1
 
-if [ ! -f "$PGDATA/PG_VERSION" ]; then
-    echo "Initializing MatrixDB..."
-    mkdir -p "$PGDATA"
-    initdb -D "$PGDATA" --encoding=UTF8 2>/dev/null || true
+# 检查数据库是否已初始化（镜像内已有数据）
+if [ -f "$MASTER_DATA_DIRECTORY/postgresql.conf" ]; then
+    echo "✅ 检测到已有数据库，直接启动..."
+else
+    echo "❌ 未找到数据库，请确保使用正确的镜像！"
+    exit 1
 fi
 
-pg_ctl -D "$PGDATA" -l /var/log/matrixdb.log start 2>/dev/null || pg_ctl -D "$PGDATA" start
+# 启动数据库（如果未运行）
+su - mxadmin -c "
+    source /opt/ymatrix/matrixdb5/greenplum_path.sh
+    export MASTER_DATA_DIRECTORY=/data/master/gpseg-1
+    gpstate -s | grep -q 'Master is running' || gpstart -a
+"
 
-if [ -n "$MATRIXDB_USER" ] && [ -n "$MATRIXDB_DB" ]; then
-    sleep 2
-    psql -h localhost -p $PGPORT -U postgres -tc "SELECT 1 FROM pg_roles WHERE rolname='$MATRIXDB_USER'" | grep -q 1 ||         psql -h localhost -p $PGPORT -U postgres -c "CREATE USER $MATRIXDB_USER SUPERUSER;"
-    psql -h localhost -p $PGPORT -U postgres -tc "SELECT 1 FROM pg_database WHERE datname='$MATRIXDB_DB'" | grep -q 1 ||         psql -h localhost -p $PGPORT -U postgres -c "CREATE DATABASE $MATRIXDB_DB OWNER $MATRIXDB_USER;"
+# 创建环境变量指定的数据库（如果不存在）
+if [ -n "$MATRIXDB_DB" ]; then
+    su - mxadmin -c "psql -p 5432 -d postgres -c \"CREATE DATABASE $MATRIXDB_DB;\" 2>/dev/null || true"
 fi
 
-echo "MatrixDB ready on port $PGPORT."
+# 设置用户密码（如果提供了）
+if [ -n "$MATRIXDB_USER" ] && [ -n "$MATRIXDB_PASSWORD" ]; then
+    su - mxadmin -c "psql -p 5432 -d postgres -c \"ALTER USER $MATRIXDB_USER WITH PASSWORD '$MATRIXDB_PASSWORD';\" 2>/dev/null || true"
+fi
+
+echo "✅ MatrixDB 已就绪！"
+
+# 保持容器运行
 tail -f /dev/null

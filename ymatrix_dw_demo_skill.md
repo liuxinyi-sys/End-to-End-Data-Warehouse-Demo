@@ -6,7 +6,7 @@ description: "基于 YMatrix 数据库的数据仓库场景 Demo 开发指南。
 
 # YMatrix 数仓场景 Demo 开发完整指南
 
-官方文档: https://ymatrix.cn/zh/doc/6.8
+官方文档: https://ymatrix.cn/zh/doc/5.2
 
 ## 一、YMatrix 核心架构概述
 
@@ -375,7 +375,7 @@ WHERE pickup_datetime >= now() - INTERVAL '1 hour'
 GROUP BY window;
 ```
 
-**功能示例文档**：/zh/doc/6.8/reference/streaming/function_practice
+**功能示例文档**：/zh/doc/5.2/reference/streaming/function_practice
 
 ---
 
@@ -436,7 +436,7 @@ YMatrix 提供 Grafana 监控面板（默认端口 3000），覆盖：
 
 浏览器访问的图形化管理界面，功能包括：一键部署、自助巡检、秒级扩容、Kafka 导入配置、负载分析、查询监控、健康监测。
 
-文档：/zh/doc/6.8/reference/MatrixUI_use
+文档：/zh/doc/5.2/reference/MatrixUI_use
 
 ### 8.3 备份恢复
 
@@ -457,11 +457,11 @@ mxrestore --backup-dir /backup/dw_demo
 
 ### 9.1 推荐技术栈
 
-YMatrix 6.x（社区版）+ MatrixGate + Python/Node.js 应用 + Grafana/自建前端
+MatrixDB 5.2.x（社区版）+ MatrixGate + Python/Node.js 应用 + Grafana/自建前端
 
 ### 9.2 最小 Demo 步骤
 
-1. **环境准备**：安装 YMatrix 6.x，创建数据库，安装 matrixts 扩展
+1. **环境准备**：安装 MatrixDB 5.2.x，创建数据库，安装 matrixts 扩展
 2. **建表**：ODS 层（MARS3）+ DIM 层（HEAP）
 3. **数据加载**：COPY / mxgate 加载样本数据 / Python 脚本模拟生成
 4. **数仓分层 ETL**：ODS → DWD 清洗 → DWS 物化视图预聚合 → ADS 视图
@@ -486,7 +486,7 @@ ORDER BY d.date;
 
 ## 十、文档索引速查
 
-| 主题 | URL（相对 /zh/doc/6.8/）|
+| 主题 | URL（相对 /zh/doc/5.2/）|
 |------|------------------------|
 | 快速入门 | /get-started |
 | 时序场景实践 | /get_started/basic_use |
@@ -536,6 +536,6 @@ ORDER BY d.date;
 ## 参考
 
 - 官方网站：https://ymatrix.cn
-- 文档首页：https://ymatrix.cn/zh/doc/6.8
+- 文档首页：https://ymatrix.cn/zh/doc/5.2
 - 社区版下载：https://ymatrix.cn/download
-- 版本历史：https://ymatrix.cn/zh/doc/6.8/version_list
+- 版本历史：https://ymatrix.cn/zh/doc/5.2/version_list
