@@ -12,7 +12,7 @@
 | 组件 | 版本 | 用途 |
 |------|------|------|
 | Docker Desktop | 20.10+ | 容器编排 |
-| Python | 3.8+ | ETL 脚本 |
+| Python | 3.6 | ETL 脚本 |
 | MySQL 8.0 | Docker 镜像 | 模拟业务库 |
 | MatrixDB 5.2.1 | .deb 包 + Dockerfile 构建 | 数仓引擎 |
 | Grafana | Docker 镜像 | 可视化仪表盘 |

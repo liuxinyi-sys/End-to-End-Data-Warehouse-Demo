@@ -32,7 +32,7 @@
 
 ```
 Docker Compose
-├── MySQL (port 3306) — 业务库（5 表 + 种子数据）
+├── MySQL (port 3306) — 业务库
 ├── YMatrix (port 5432) — 数仓引擎（五层: ODS + DIM + DWD + DWS + ADS）
 ├── Grafana (port 3000) — 可视化仪表盘
 │   └── data source → YMatrix (PostgreSQL protocol)
@@ -724,7 +724,7 @@ CREATE FOREIGN TABLE fdw_orders (...) SERVER mysql_ecommerce
 
 > S3 建议: YMatrix 自身也提供 Grafana 集群监控面板（QPS、Segment 负载、写入速率），
 > 可在 Grafana 中添加 YMatrix 官方 dashboard JSON，作为额外展示亮点。
-> 详见 SKILL.md §8.1: https://ymatrix.cn/zh/doc/6.8/monitor/grafana_installation
+> 详见 SKILL.md §8.1: https://ymatrix.cn/zh/doc/5.2/monitor/grafana_installation
 
 
 ## 8. Docker Compose

@@ -1,0 +1,6 @@
+-- mysql_fdw (optional, requires mysql_fdw extension in YMatrix image)
+-- CREATE EXTENSION IF NOT EXISTS mysql_fdw;
+-- CREATE SERVER mysql_ecommerce FOREIGN DATA WRAPPER mysql_fdw
+--     OPTIONS (host 'mysql', port '3306', dbname 'ecommerce');
+-- CREATE USER MAPPING FOR mxadmin SERVER mysql_ecommerce
+--     OPTIONS (username 'root', password 'root');
