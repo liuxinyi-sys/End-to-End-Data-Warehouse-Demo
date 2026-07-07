@@ -295,7 +295,7 @@ PARTITION BY RANGE (order_date)
 ```sql
 -- GMV 日汇总
 CREATE MATERIALIZED VIEW dws_daily_gmv AS
-SELECT date_trunc('day', order_date) AS dt,
+SELECT time_bucket('1 day', order_date::timestamp) AS dt,
        COUNT(*) AS order_count,
        SUM(total_amount) AS gmv,
        AVG(total_amount) AS avg_order_amount
@@ -419,7 +419,16 @@ CREATE TABLE ods_orders_heap (
     promo_id INT, sync_time TIMESTAMP
 ) USING HEAP
 DISTRIBUTED BY (order_id);
+
+-- 对比查询
+SELECT 'MARS3' AS engine,
+       pg_size_pretty(pg_total_relation_size('ods_orders')) AS total_size
+UNION ALL
+SELECT 'HEAP',
+       pg_size_pretty(pg_total_relation_size('ods_orders_heap'));
 ```
+
+预期结果：MARS3 至少节省 50% 空间（50K 行场景下）。
 ---
 
 ### 4.9 扩展：实时连续视图（Domino 流计算）
@@ -554,7 +563,20 @@ proc.communicate(buf.getvalue())
 ```
 ### 5.4 ETL 日志
 
-每步写入 `etl_log` 表，最终 `SELECT * FROM etl_log` 展示全链路耗时。
+每步 ETL 操作写入一行 `etl_log`：
+
+```python
+log_entry = {"step": "load_ods", "status": "success", "rows_processed": 50000, "duration_ms": 3200}
+```
+
+最终查询：
+
+```sql
+SELECT step, status, rows_processed, duration_ms,
+       to_char((duration_ms || chr(39)||' milliseconds'||chr(39))::interval, 'HH24:MI:SS') AS duration
+FROM etl_log
+ORDER BY log_id;
+```
 
 ---
 
@@ -568,7 +590,7 @@ proc.communicate(buf.getvalue())
 |            | 金额四舍五入到 2 位小数                                    | NUMERIC(10,2) 约束                                  |
 |            | 状态值映射                                                 | MySQL 存储 0/1 → YMatrix 存储 'paid'/'cancelled' 等 |
 |            | 时间戳统一为 TIMESTAMP                                     | sync_time 用 Python 当前时间填充                    |
-| 衍生字段   | freight_amount / discount_amount / source_type / region_id | 见 §4.8 规则                                        |
+| 衍生字段   | freight_amount / discount_amount / source_type / region_id | 见 §4.7 规则（freight/discount/source 已 SQL 化，见 §5.6）                                        |
 | 去重       | 对 ODS 源数据按主键去重                                    | 防止重复同步                                        |
 
 ### 5.6 ODS→DWD ETL SQL
@@ -670,7 +692,7 @@ psycopg2-binary>=2.9.0
 | 7   | DISTRIBUTED BY + ORDER BY | 全部 DDL                      | 数据分布策略                       |
 | 8   | mysql_fdw 联邦查询        | fdw.sql                       | CREATE FOREIGN TABLE 跨库 JOIN     |
 | 9   | Grafana + Prometheus      | docker-compose                | 预置 Dashboard                     |
-| 10  | date_trunc 聚合           | dws_daily_gmv / ads_daily_gmv | 标准 PostgreSQL 日期聚合           |
+| 10  | time_bucket 时序函数       | dws_daily_gmv                 | YMatrix 时序专用函数，替代标准 date_trunc           |
 | 11  | 压缩率对比                | verify/compression.sql        | MARS3 vs HEAP 表大小               |
 | 12  | HEAP 引擎对照             | verify/                       | 同数据 HEAP 表作对照               |
 ### 6.1 mysql_fdw DDL
@@ -795,7 +817,7 @@ D:\End-to-End-Data-Warehouse-Demo\
 │   ├── Dockerfile                 ← 基于 minimal install 构建镜像
 │   ├── 01_init.sql                ← 创建 ext, APM, dim_date 生成
 │   ├── 02_ods.sql                 ← ODS 5 表 DDL
-│   ├── 03_dim.sql  -> DIM 5 表 DDL（I2 修复）
+│   ├── 03_dim.sql       -> DIM 5 表 DDL
 │   ├── 03_dwd.sql                 ← DWD 2 事实表 DDL
 │   ├── 04_dws.sql                 ← 标准物化视图 DDL
 │   ├── 05_ads.sql                 ← ADS 视图 DDL
@@ -865,12 +887,12 @@ D:\End-to-End-Data-Warehouse-Demo\
 | 数据量 | 50K 订单 / 200K 明细 | 分区裁剪有效，Grafana 曲线有波峰 |
 | 双11 场景 | 加 dim_promotion + promo_id | 极小改动，极大提升 Demo 叙事效果 |
 | 压缩率验证 | ods_orders_heap 对照表 | verify 脚本 + report 截图 |
-| time_bucket | DWS 层使用 | 1 行 SQL 展示 YMatrix 时序函数 |
+| | time_bucket | DWS 层      | time_bucket('1 day', order_date::timestamp) 展示 YMatrix 时序能力序能力 |
 | CREATE VIEW WITH (CONTINUOUS) | 改为标准物化视图 | B2: SKILL.md §5.3 使用 MATERIALIZED VIEW + REFRESH |
 | DIM 引擎选择 | MARS3 -> HEAP | M1: SKILL.md 建议维表用 HEAP |
 | 复购率字段 | is_repeat_buyer -> total_orders | M4: 存计数保灵活 |
 | season 编码 | SMALLINT -> VARCHAR | S2: 文字编码可读性高 |
-| time_bucket | 改用 date_trunc | M5: DATE 类型无需 time_bucket |
+| time_bucket | 改回 time_bucket (with ::timestamp cast) | 展示 YMatrix 时序专用函数，区分于标准 PG |
 | DIM 刷新策略 | TRUNCATE + mxgate | S4: 维表<1000行，全量刷新最简单可靠 |
 | ETL 幂等性 | TRUNCATE + REFRESH | E1: 可安全重跑，不重复不丢数据 |
 | Docker base | ubuntu:20.04 + .deb 包 | B1 更新: 使用 matrixdb5_5.2.1 社区版 .deb 安装 |
