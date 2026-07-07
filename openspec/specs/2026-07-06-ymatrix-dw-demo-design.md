@@ -1,4 +1,3 @@
-
 # YMatrix 端到端数仓 Demo 设计文档
 
 > 创建日期: 2026-07-06
@@ -15,21 +14,48 @@
 
 ---
 
+### 1.1 技术栈
+
+| 组件               | 版本             | 用途            | 来源            |
+| ------------------ | ---------------- | --------------- | --------------- |
+| MatrixDB (YMatrix) | 5.2.1 社区版     | 数仓引擎        | .deb 安装包     |
+| MySQL              | 8.0              | 业务数据库      | Docker Hub      |
+| Python             | 3.8+             | ETL 脚本        | 宿主机          |
+| pandas             | 1.5.0+           | 数据清洗        | pip             |
+| psycopg2-binary    | 2.9.0+           | PostgreSQL 连接 | pip             |
+| PyMySQL            | 1.0.0+           | MySQL 连接      | pip             |
+| Grafana            | latest           | 可视化仪表盘    | Docker Hub      |
+| mxgate             | 随 MatrixDB 内置 | 高性能数据写入  | MatrixDB 安装包 |
+| Docker Desktop     | 20.10+           | 容器编排        | 宿主机          |
+
 ## 2. 架构总览
 
 ```
 Docker Compose
 ├── MySQL (port 3306) — 业务库（5 表 + 种子数据）
-├── YMatrix (port 5432) — 数仓引擎（四层 + DIM）
-│   └── mxgate (port 8090) — 高性能写入
-└── Grafana (port 3000) — 可视化仪表盘
-     └── data source → YMatrix (PostgreSQL protocol)
+├── YMatrix (port 5432) — 数仓引擎（五层: ODS + DIM + DWD + DWS + ADS）
+├── Grafana (port 3000) — 可视化仪表盘
+│   └── data source → YMatrix (PostgreSQL protocol)
+└── sync/ (Python ETL 脚本)
+    ├── mxgate CLI → ODS & DIM 层写入
+    └── SQL → DWD 清洗 → REFRESH MV → ADS 视图
 
 ETL (Python):
   MySQL → pandas 清洗 → mxgate stdin → ODS
-  ODS → SQL → DWD → 连续物化视图 → DWS → 视图 → ADS
+  ODS → mxgate stdin → DIM
+  ODS → SQL → DWD → REFRESH MV → DWS → 视图 → ADS
 ```
 
+### 2.1 数据流
+
+1. Python 脚本从 MySQL 抽取全量数据（extract）
+2. pandas 清洗：去空、类型标准化、衍生字段（transform）
+3. mxgate --source stdin 灌入 ODS 层（load_ods）
+4. TRUNCATE + mxgate 灌入 DIM 层（load_dim，数据从 ODS 去重后写入）
+5. SQL INSERT INTO...SELECT... 执行 ODS → DWD 清洗（apply_dwd）
+6. REFRESH MATERIALIZED VIEW 更新 DWS 层（sync_data.py 中统一触发）
+7. ADS 视图封装最终指标（YMatrix 视图）
+8. Grafana 直连 ADS 层出图
 
 ### 2.2 init_all.sh 一键初始化脚本
 
@@ -47,10 +73,13 @@ until docker-compose exec -T mysql mysqladmin ping -uroot -proot --silent; do
     sleep 3
 done
 # 等待 YMatrix
-until docker-compose exec -T ymatrix psql -U mxadmin -d dw_demo -c "SELECT 1;" 2>/dev/null; do
+until docker-compose exec -T ymatrix psql -U mxadmin -d postgres -c "SELECT 1;" 2>/dev/null; do
     echo "Waiting for YMatrix..."
     sleep 5
 done
+
+echo "=== Step 2.5: 创建 dw_demo 数据库 ==="
+docker-compose exec -T ymatrix psql -U mxadmin -d postgres -c "CREATE DATABASE dw_demo OWNER mxadmin;"
 
 echo "=== Step 3: 初始化 YMatrix 数据库对象 ==="
 for f in ymatrix/init/*.sql; do
@@ -70,33 +99,20 @@ cd sync && python verify.py && cd ..
 echo "Grafana: http://localhost:3000 (admin/admin)"
 ```
 
-### 2.1 数据流
-
-1. Python 脚本从 MySQL 抽取全量数据（extract）
-2. pandas 清洗：去空、类型标准化、衍生字段（transform）
-3. mxgate --source stdin 灌入 ODS 层（load_ods）
-4. TRUNCATE + mxgate 灌入 DIM 层（load_dim）
-5. SQL INSERT INTO...SELECT... 执行 ODS → DWD 清洗（apply_dwd）
-6. 连续物化视图自动刷新 DWS 层（YMatrix 自动）
-7. ADS 视图封装最终指标（YMatrix 视图）
-8. Grafana 直连 ADS 层出图
-
----
-
 ## 3. 业务库（MySQL）
 
 ### 3.1 表结构
 
-| 表名 | 核心字段 | 预计行数 |
-|------|---------|---------|
-| users | user_id, name, email, register_date, city, status | 1,000 |
-| products | product_id, product_name, category, price, stock | 500 (10+ 品类) |
-| orders | order_id, user_id, order_date, status, total_amount, promo_id | 50,000 |
-| order_items | item_id, order_id, product_id, qty, unit_price | 200,000 |
-| payments | payment_id, order_id, method, pay_date, amount, status | 50,000 |
-| dim_date | date_key, year, quarter, month, week, day_of_month, day_of_week, is_weekend, season | 1,096 (3年) |
-| dim_region | region_id, province, city, district, region_tier | ~100 (省/市) |
-| dim_promotion | promo_id, promo_name, promo_type, start_date, end_date | ~10 (大促活动) |
+| 表名          | 核心字段                                                                            | 预计行数       |
+| ------------- | ----------------------------------------------------------------------------------- | -------------- |
+| users         | user_id, name, email, register_date, city, province, status                         | 1,000          |
+| products      | product_id, product_name, category, price, stock                                    | 500 (10+ 品类) |
+| orders        | order_id, user_id, order_date, status, total_amount, promo_id                       | 50,000         |
+| order_items   | item_id, order_id, product_id, qty, unit_price                                      | 200,000        |
+| payments      | payment_id, order_id, method, pay_date, amount, status                              | 50,000         |
+| dim_date      | date_key, year, quarter, month, week, day_of_month, day_of_week, is_weekend, season | 1,096 (3年)    |
+| dim_region    | region_id, province, city, district, region_tier                                    | ~100 (省/市)   |
+| dim_promotion | promo_id, promo_name, promo_type, start_date, end_date, discount_rate               | ~10 (大促活动) |
 
 ### 3.2 数据特征
 
@@ -118,6 +134,7 @@ echo "Grafana: http://localhost:3000 (admin/admin)"
 **地域分布**: 北京/上海/广州/成都/武汉，覆盖华北/华东/华南/西南/华中
 
 **商业特征**:
+
 - 约 30% 用户产生 2 次以上购买（复购率）
 - 品类 GMV 占比: 电子 30% / 服装 25% / 美妆 20% / 食品 15% / 家居 10%
 - 订单支付率约 95%，支付方式含支付宝/微信/银行卡
@@ -151,13 +168,16 @@ PARTITION BY RANGE (order_date)
 
 同模式: `ods_order_items`, `ods_payments`, `ods_users`, `ods_products`
 
+> 注意：`ods_users` 额外包含 `province VARCHAR(50)` 字段，用于 dim_region 的多条件 JOIN。
+
 ### 4.2 DIM 层（维度表）
 
 引擎: **HEAP**（SKILL.md 建议维表用 HEAP） | 无分区
 
 | 表名 | 内容 | 来源 |
-|------|------|------|
-```sql
+| ---- | ---- | ---- |
+
+````sql
 -- dim_date 日期维度表（generate_series 生成，覆盖 2023-2025）
 CREATE TABLE dim_date (
     date_key      DATE,           -- 2024-01-01
@@ -188,7 +208,8 @@ CREATE TABLE dim_promotion (
     promo_name    VARCHAR(100),   -- "双11大促"
     promo_type    VARCHAR(20),    -- "预热" / "正式" / "返场"
     start_date    DATE,
-    end_date      DATE
+    end_date      DATE,
+    discount_rate NUMERIC(3,2) DEFAULT 0  -- 折扣率, 如 0.15 = 15% off
 ) USING HEAP
 DISTRIBUTED BY (promo_id);
 
@@ -240,9 +261,10 @@ PARTITION BY RANGE (order_date)
 ( START (date '2024-01-01') INCLUSIVE
   END (date '2025-01-01') EXCLUSIVE
   EVERY (INTERVAL '1 day') );
-```
+````
 
 **dwd_order_detail_fact**（粒度：一个订单中一件商品一行）:
+
 ```sql
 CREATE TABLE dwd_order_detail_fact (
     detail_id     INT,
@@ -357,10 +379,6 @@ SELECT CASE WHEN o.promo_id IS NOT NULL THEN '大促期' ELSE '日常期' END AS
        SUM(o.total_amount) / COUNT(DISTINCT o.order_id) AS avg_order_value
 FROM dwd_order_fact o GROUP BY 1;
 ```
-
----
-
-## 5. 数据同步 (ETL)
 ### 4.6 ETL 审计表
 
 记录全链路每步耗时，用于报告展示：
@@ -379,19 +397,18 @@ DISTRIBUTED BY (log_id)
 ORDER BY (log_time);
 ```
 
+### 4.7 DWD 字段来源说明
 
-### 4.8 DWD 字段来源说明
+> 修复项 M2: dwd_order_fact 中 4 个字段在 MySQL 源表不存在，由 ETL 的 SQL （load_dwd.py 中的 INSERT...SELECT）直接计算
 
-> 修复项 M2: dwd_order_fact 中 4 个字段在 MySQL 源表不存在，由 ETL 的 transform.py 生成
+| DWD 字段        | 来源              | 生成逻辑                                                  |
+| --------------- | ----------------- | --------------------------------------------------------- |
+| freight_amount  | transform.py 衍生 | 订单金额 >= 200 免运费(0)，否则随机 8-15 元               |
+| discount_amount | transform.py 衍生 | 促销期内随机 5-30 元优惠券抵扣，日常期为 0                |
+| source_type     | transform.py 衍生 | 按概率分配: web=30%, app=50%, miniapp=20%                 |
+| region_id       | transform.py 关联 | 从 users.city 关联 dim_region，通过城市名映射到 region_id |
 
-| DWD 字段 | 来源 | 生成逻辑 |
-|---------|------|---------|
-| freight_amount | transform.py 衍生 | 订单金额 >= 200 免运费(0)，否则随机 8-15 元 |
-| discount_amount | transform.py 衍生 | 促销期内随机 5-30 元优惠券抵扣，日常期为 0 |
-| source_type | transform.py 衍生 | 按概率分配: web=30%, app=50%, miniapp=20% |
-| region_id | transform.py 关联 | 从 users.city 关联 dim_region，通过城市名映射到 region_id |
-
-### 4.7 HEAP 压缩率对照表
+### 4.8 HEAP 压缩率对照表
 
 仅用于 verify 脚本，同结构 HEAP 表对照 MARS3 压缩效果：
 
@@ -403,24 +420,82 @@ CREATE TABLE ods_orders_heap (
 ) USING HEAP
 DISTRIBUTED BY (order_id);
 ```
-
 ---
+
+### 4.9 扩展：实时连续视图（Domino 流计算）
+
+> 本小节是 YMatrix Domino 流计算引擎的扩展演示，**不纳入主线 ETL 流程**。
+> 用于向客户展示 YMatrix 在实时流场景下的 SQL 级流处理能力——无需 Flink/Spark，
+> 在数据库内部用标准 SQL 即可处理实时数据流。
+
+#### 为什么单独列为扩展？
+
+| 场景 | 主线方案（§4.4） | 扩展方案（§4.9） |
+|------|----------------|----------------|
+| 引擎 | 标准物化视图 + REFRESH | Domino 连续视图（自动刷新） |
+| 触发方式 | ETL 批量完成后手动 REFRESH | INSERT 时自动聚合 |
+| 适用场景 | 日报 / 周报等批处理 | 实时看板 / 实时大屏 |
+| 多表 JOIN | 支持（DWD 宽表） | 不支持（单流） |
+
+#### DDL
+
+```sql
+-- 1. 创建流（模拟实时订单数据流）
+CREATE STREAM order_stream (
+    order_id      INT,
+    user_id       INT,
+    order_date    TIMESTAMP,
+    total_amount  NUMERIC(10,2),
+    promo_id      INT
+);
+
+-- 2. 创建连续视图（每 INSERT 一条即自动更新，无需 REFRESH）
+CREATE CONTINUOUS VIEW cv_today_gmv AS
+SELECT date_trunc(chr(39)||'minute'||chr(39), order_date) AS minute,
+       COUNT(*) AS order_count,
+       SUM(total_amount) AS gmv
+FROM order_stream
+WHERE order_date >= CURRENT_DATE::TIMESTAMP
+GROUP BY minute;
+```
+
+#### 演示方式
+
+```sql
+-- 1. 启动主线 ETL，数据进入 DWD
+-- 2. 执行以上 DDL 创建流和连续视图
+-- 3. 手动插入 3 条模拟订单
+INSERT INTO order_stream VALUES (100001, 42, now(), 599.00, 5);
+INSERT INTO order_stream VALUES (100002, 73, now(), 1299.00, 5);
+INSERT INTO order_stream VALUES (100003, 15, now(), 88.00, 1);
+-- 4. 查询实时聚合结果
+SELECT * FROM cv_today_gmv ORDER BY minute DESC;
+-- 5. （可选）在 Grafana 中添加一个基于 cv_today_gmv 的面板
+--    Grafana 类型: Time series, 刷新间隔: 5s
+--    写入新 INSERT 时面板数据自动刷新
+```
+
+**要点**: 连续视图与标准物化视图（§4.4）使用不同的引擎（Domino vs PostgreSQL），
+共享同一份 DWD 源表设计。从批处理迁移到实时无需重做数仓分层设计。
 
 ## 5. 数据同步 (ETL)
 
 
-### 5.1 ETL 幂等性设计（E1 修复）
+### 5.1 ETL 幂等性设计
 
 sync_data.py 保证幂等性（可安全重跑）:
 
 1. **ODS 层** — 每次加载前执行 TRUNCATE 对应 ODS 分区:
+
    ```python
    conn.execute("TRUNCATE ods_orders;")
    conn.execute("TRUNCATE ods_orders CASCADE;")  # 跳过分区直接清理
    ```
+
    或使用 DELETE WHERE sync_time >= today 做增量幂等。
 
 2. **DIM 层** — TRUNCATE + mxgate 本身就是幂等（全量刷新）:
+
    ```python
    conn.execute("TRUNCATE dim_user CASCADE;")
    conn.execute("TRUNCATE dim_product CASCADE;")
@@ -428,6 +503,7 @@ sync_data.py 保证幂等性（可安全重跑）:
    ```
 
 3. **DWD 层** — TRUNCATE 后 INSERT INTO...SELECT:
+
    ```python
    conn.execute("TRUNCATE dwd_order_fact CASCADE;")
    conn.execute("TRUNCATE dwd_order_detail_fact CASCADE;")
@@ -439,7 +515,7 @@ sync_data.py 保证幂等性（可安全重跑）:
 5. **失败恢复**: 每一步用 try/except 包裹，失败时记录 etl_log 并终止后续步骤。
    人工修复后重新执行 sync_data.py 从头开始。
 
-### 5.1 架构
+### 5.2 架构
 
 ```
 sync/
@@ -455,20 +531,7 @@ sync/
 ```
 
 
-### 5.4 transform.py 清洗规则（E3 修复）
-
-| 处理类型 | 规则 | 说明 |
-|---------|------|------|
-| 空值处理 | 必填字段为 NULL → 跳过该行并记录 etl_log | order_id / user_id / order_date 不能为空 |
-| | 可选字段为 NULL → 填默认值 | promo_id→0, freight_amount→0 |
-| 类型标准化 | 日期统一为 DATE 格式 | MySQL 可能返回 datetime，强制转 DATE |
-| | 金额四舍五入到 2 位小数 | NUMERIC(10,2) 约束 |
-| | 状态值映射 | MySQL 存储 0/1 → YMatrix 存储 'paid'/'cancelled' 等 |
-| | 时间戳统一为 TIMESTAMP | sync_time 用 Python 当前时间填充 |
-| 衍生字段 | freight_amount / discount_amount / source_type / region_id | 见 §4.8 规则 |
-| 去重 | 对 ODS 源数据按主键去重 | 防止重复同步 |
-
-### 5.2 mxgate 写入示例
+### 5.3 mxgate 写入示例
 
 ```python
 import subprocess, csv, io
@@ -489,9 +552,26 @@ proc = subprocess.Popen([
 ], stdin=subprocess.PIPE, text=True)
 proc.communicate(buf.getvalue())
 ```
+### 5.4 ETL 日志
 
+每步写入 `etl_log` 表，最终 `SELECT * FROM etl_log` 展示全链路耗时。
 
-### 3.5 ODS→DWD ETL SQL（E4 修复）
+---
+
+### 5.5 transform.py 清洗规则
+
+| 处理类型   | 规则                                                       | 说明                                                |
+| ---------- | ---------------------------------------------------------- | --------------------------------------------------- |
+| 空值处理   | 必填字段为 NULL → 跳过该行并记录 etl_log                   | order_id / user_id / order_date 不能为空            |
+|            | 可选字段为 NULL → 填默认值                                 | promo_id→0, freight_amount→0                        |
+| 类型标准化 | 日期统一为 DATE 格式                                       | MySQL 可能返回 datetime，强制转 DATE                |
+|            | 金额四舍五入到 2 位小数                                    | NUMERIC(10,2) 约束                                  |
+|            | 状态值映射                                                 | MySQL 存储 0/1 → YMatrix 存储 'paid'/'cancelled' 等 |
+|            | 时间戳统一为 TIMESTAMP                                     | sync_time 用 Python 当前时间填充                    |
+| 衍生字段   | freight_amount / discount_amount / source_type / region_id | 见 §4.8 规则                                        |
+| 去重       | 对 ODS 源数据按主键去重                                    | 防止重复同步                                        |
+
+### 5.6 ODS→DWD ETL SQL
 
 load_dwd.py 执行的 SQL 逻辑:
 
@@ -512,17 +592,17 @@ SELECT
     COALESCE(r.region_id, 0) AS region_id,      -- 通过用户城市关联
     COALESCE(o.promo_id, 0) AS promo_id,
     o.total_amount,
-    0 AS freight_amount,                          -- 由 transform.py 填充
-    0 AS discount_amount,                         -- 由 transform.py 填充
+    CASE WHEN o.total_amount >= 200 THEN 0 ELSE round((random()*7+8)::numeric,2) END AS freight_amount,  -- SQL 化
+    CASE WHEN o.promo_id IS NOT NULL THEN round((random()*25+5)::numeric,2) ELSE 0 END AS discount_amount,  -- SQL 化
     o.order_date::TIMESTAMP AS create_time,
     CASE WHEN o.status IN ('paid','shipped','completed') THEN o.order_date::TIMESTAMP ELSE NULL END AS pay_time,
     CASE WHEN o.status = 'cancelled' THEN o.order_date::TIMESTAMP ELSE NULL END AS cancel_time,
     CASE WHEN o.status = 'completed' THEN o.order_date::TIMESTAMP + INTERVAL '2 days' ELSE NULL END AS finish_time,
-    'web' AS source_type,                         -- 由 transform.py 填充
+    CASE mod(o.order_id,10) WHEN 0 THEN 'miniapp' WHEN 1 THEN 'miniapp' WHEN 2 THEN 'web' WHEN 3 THEN 'web' WHEN 4 THEN 'web' ELSE 'app' END AS source_type,  -- SQL 化
     o.status
 FROM ods_orders o
 LEFT JOIN ods_users u ON o.user_id = u.user_id
-LEFT JOIN dim_region r ON u.city = r.city       -- 通过城市名关联地域
+LEFT JOIN dim_region r ON u.city = r.city AND u.province = r.province  -- 城市+省份复合关联，避免同名城市误匹配
 WHERE o.status IS NOT NULL;                      -- 过滤脏数据
 
 -- order_items ETL: ODS -> DWD
@@ -543,58 +623,57 @@ SELECT
     oi.qty AS sku_num,
     oi.unit_price AS original_price,
     oi.unit_price * (1 - COALESCE(p.discount_rate, 0)) AS final_price,
-    'web' AS source_type
+    CASE mod(oi.order_id,10) WHEN 0 THEN 'miniapp' WHEN 1 THEN 'miniapp' WHEN 2 THEN 'web' WHEN 3 THEN 'web' WHEN 4 THEN 'web' ELSE 'app' END AS source_type
 FROM ods_order_items oi
 JOIN ods_orders o ON oi.order_id = o.order_id
 LEFT JOIN dim_promotion p ON o.promo_id = p.promo_id AND o.order_date BETWEEN p.start_date AND p.end_date
 WHERE o.status IS NOT NULL;
 ```
 
-### 5.3 ETL 日志
 
-每步写入 `etl_log` 表，最终 `SELECT * FROM etl_log` 展示全链路耗时。
+
+### 5.7 Python 依赖
+
+```txt
+pandas>=1.5.0
+PyMySQL>=1.0.0
+psycopg2-binary>=2.9.0
+````
+
+├── grafana/
+│ ├── datasources/ymatrix.yaml
+│ └── dashboards/ymatrix_dw_demo.json
+│
+├── screenshots/ # 运行结果截图
+│ └── ...png
+│
+├── openspec/
+│ └── specs/
+│ └── 2026-07-06-ymatrix-dw-demo-design.md ← 本文件
+│
+└── data/ # Docker volumes（gitignored）
+
+````
 
 ---
 
 ## 6. YMatrix 特性展示清单
 
-| # | 特性 | 展示位置 | 展示方式 |
-|---|------|---------|---------|
-| 1 | MARS3 引擎 | 全部 DDL | "USING MARS3" 关键字 |
-| 2 | lz4 压缩 | ODS/DWD/DIM DDL | compresstype + compresslevel |
-| 3 | RANGE 分区 | ODS/DWD 建表 | PARTITION BY RANGE |
-| 4 | 自动分区管理 APM | 初始化脚本 | apm_enable_partition_maintenance() |
-| 5 | 连续物化视图 | DWS 层 DDL | CREATE VIEW WITH (CONTINUOUS) |
-| 6 | mxgate 写入 | sync/load_ods.py | --parallel 256 --source stdin |
-| 7 | DISTRIBUTED BY + ORDER BY | 全部 DDL | 数据分布策略 |
-| 8 | mysql_fdw 联邦查询 | fdw.sql | CREATE FOREIGN TABLE 跨库 JOIN |
-| 9 | Grafana + Prometheus | docker-compose | 预置 Dashboard |
-| 10 | date_trunc 聚合 | dws_daily_gmv / ads_daily_gmv | 标准 PostgreSQL 日期聚合 |
-| 11 | 压缩率对比 | verify/compression.sql | MARS3 vs HEAP 表大小 |
-| 12 | HEAP 引擎对照 | verify/ | 同数据 HEAP 表作对照 |
-
----
-
-## 7. Grafana Dashboard
-
-### 7.1 面板设计（6 个面板）
-
-| 面板 | 类型 | 数据源 (ADS) | 展示维度 |
-|------|------|-------------|---------|
-| 每日 GMV 趋势 | 时间序列折线图 | ads_daily_gmv | 时间 |
-| 商品销售 Top 10 | 表格 | ads_top_products | 商品 |
-| 品类销售占比 | 饼图 | ads_category_sales | 品类 |
-| 用户复购率 | 单值 Stat | ads_user_repurchase | 用户 |
-| GMV 按省份分布 | 树图/Treemap | ads_gmv_by_region | 地域 |
-| 促销 vs 日常 GMV | 柱状图 | ads_promo_compare | 促销 |
-
-
-> S3 建议: YMatrix 自身也提供 Grafana 集群监控面板（QPS、Segment 负载、写入速率），
-> 可在 Grafana 中添加 YMatrix 官方 dashboard JSON，作为额外展示亮点。
-> 详见 SKILL.md §8.1: https://ymatrix.cn/zh/doc/6.8/monitor/grafana_installation
-
-
-### 6.1 mysql_fdw DDL（I4 修复）
+| #   | 特性                      | 展示位置                      | 展示方式                           |
+| --- | ------------------------- | ----------------------------- | ---------------------------------- |
+| 1   | MARS3 引擎                | 全部 DDL                      | "USING MARS3" 关键字               |
+| 2   | lz4 压缩                  | ODS/DWD/DIM DDL               | compresstype + compresslevel       |
+| 3   | RANGE 分区                | ODS/DWD 建表                  | PARTITION BY RANGE                 |
+| 4   | 自动分区管理 APM          | 初始化脚本                    | apm_enable_partition_maintenance() |
+| 5   | 连续物化视图（Domino）    | DWS 层 DDL（§4.9 扩展）        | CREATE CONTINUOUS VIEW             |
+| 6   | mxgate 写入               | sync/load_ods.py              | --parallel 256 --source stdin      |
+| 7   | DISTRIBUTED BY + ORDER BY | 全部 DDL                      | 数据分布策略                       |
+| 8   | mysql_fdw 联邦查询        | fdw.sql                       | CREATE FOREIGN TABLE 跨库 JOIN     |
+| 9   | Grafana + Prometheus      | docker-compose                | 预置 Dashboard                     |
+| 10  | date_trunc 聚合           | dws_daily_gmv / ads_daily_gmv | 标准 PostgreSQL 日期聚合           |
+| 11  | 压缩率对比                | verify/compression.sql        | MARS3 vs HEAP 表大小               |
+| 12  | HEAP 引擎对照             | verify/                       | 同数据 HEAP 表作对照               |
+### 6.1 mysql_fdw DDL
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS mysql_fdw;
@@ -605,26 +684,29 @@ CREATE USER MAPPING FOR mxadmin SERVER mysql_ecommerce
 CREATE FOREIGN TABLE fdw_orders (...) SERVER mysql_ecommerce
     OPTIONS (dbname 'ecommerce', table_name 'orders');
 ```
-### 7.2 预置配置
-
-```yaml
-# grafana/datasources/ymatrix.yaml
-apiVersion: 1
-datasources:
-  - name: YMatrix
-    type: postgres
-    url: ymatrix:5432
-    database: dw_demo
-    user: mxadmin
-    secureJsonData:
-      password: ""
-```
-
-Dashboard JSON 预生成放入 `grafana/dashboards/`，容器启动自动加载。
 
 ---
 
+## 7. Grafana Dashboard
+
+### 7.1 面板设计（6 个面板）
+
+| 面板             | 类型           | 数据源 (ADS)        | 展示维度 |
+| ---------------- | -------------- | ------------------- | -------- |
+| 每日 GMV 趋势    | 时间序列折线图 | ads_daily_gmv       | 时间     |
+| 商品销售 Top 10  | 表格           | ads_top_products    | 商品     |
+| 品类销售占比     | 饼图           | ads_category_sales  | 品类     |
+| 用户复购率       | 单值 Stat      | ads_user_repurchase | 用户     |
+| GMV 按省份分布   | 树图/Treemap   | ads_gmv_by_region   | 地域     |
+| 促销 vs 日常 GMV | 柱状图         | ads_promo_compare   | 促销     |
+
+> S3 建议: YMatrix 自身也提供 Grafana 集群监控面板（QPS、Segment 负载、写入速率），
+> 可在 Grafana 中添加 YMatrix 官方 dashboard JSON，作为额外展示亮点。
+> 详见 SKILL.md §8.1: https://ymatrix.cn/zh/doc/6.8/monitor/grafana_installation
+
+
 ## 8. Docker Compose
+
 ### 8.1 镜像构建说明（B1 更新：Ubuntu .deb）
 
 YMatrix 社区版（v5.2.1）以 .deb 包形式提供。
@@ -639,6 +721,7 @@ ENTRYPOINT ["/docker-entrypoint.sh"]
 ```
 
 MD5 校验（下载后验证完整性）:
+
 ```bash
 certutil -hashfile ymatrix/matrixdb5_5.2.1+community-1_amd64.deb MD5
 # 期望值: 4e4ac2df9792d1ef91628525f4f30614
@@ -695,7 +778,7 @@ volumes:
 
 ## 9. 工程文件清单
 
-```
+````
 D:\End-to-End-Data-Warehouse-Demo\
 ├── docker-compose.yml
 ├── init_all.sh                    # 一键初始化入口
@@ -714,7 +797,7 @@ D:\End-to-End-Data-Warehouse-Demo\
 │   ├── 02_ods.sql                 ← ODS 5 表 DDL
 │   ├── 03_dim.sql  -> DIM 5 表 DDL（I2 修复）
 │   ├── 03_dwd.sql                 ← DWD 2 事实表 DDL
-│   ├── 04_dws.sql                 ← 连续物化视图 DDL
+│   ├── 04_dws.sql                 ← 标准物化视图 DDL
 │   ├── 05_ads.sql                 ← ADS 视图 DDL
 │   ├── 06_fdw.sql                 ← mysql_fdw（附加）
 │   └── verify/
@@ -731,32 +814,8 @@ D:\End-to-End-Data-Warehouse-Demo\
 │   └── requirements.txt
 │
 
-### 5.6 Python 依赖（I3 修复）
-
-```txt
-pandas>=1.5.0
-PyMySQL>=1.0.0
-psycopg2-binary>=2.9.0
-```
-
-├── grafana/
-│   ├── datasources/ymatrix.yaml
-│   └── dashboards/ymatrix_dw_demo.json
-│
-├── screenshots/                   # 运行结果截图
-│   └── ...png
-│
-├── openspec/
-│   └── specs/
-│       └── 2026-07-06-ymatrix-dw-demo-design.md  ← 本文件
-│
-└── data/                          # Docker volumes（gitignored）
-```
-
----
-
-## 10. 验证与验收标准（I5 修复：补充具体断言值）
-### 10.1 具体验证断言值（I5 修复）
+## 10. 验证与验收标准
+### 10.1 具体验证断言值
 
 | 检查项 | 预期值 |
 |--------|-------|
@@ -824,7 +883,7 @@ psycopg2-binary>=2.9.0
 
 
 ## 12. 数据质量保证
-### 12.1 数据一致性校验（Q1 修复）
+### 12.1 数据一致性校验
 
 ```sql
 -- order_items 总额应与 orders 总额一致
@@ -833,34 +892,10 @@ SELECT COUNT(*) AS mismatches FROM (
     FROM ods_order_items GROUP BY order_id
 ) items JOIN ods_orders o USING (order_id)
 WHERE items_total != o.total_amount;
-```
+````
 
 
-### 12.1 数据一致性校验（Q1 修复）
-
-即使是最小 Demo，也应包含基本的数据交叉校验:
-
-```sql
--- 校验1: order_items 总额 == orders 总额（按 order_id 聚合）
-SELECT COUNT(*) AS mismatched_orders FROM (
-    SELECT oi.order_id, SUM(oi.qty * oi.unit_price) AS items_total
-    FROM ods_order_items oi GROUP BY oi.order_id
-) items
-JOIN ods_orders o ON items.order_id = o.order_id
-WHERE items.items_total != o.total_amount;
-
--- 校验2: 支付记录与订单状态一致
-SELECT COUNT(*) AS invalid_payments FROM ods_payments p
-JOIN ods_orders o ON p.order_id = o.order_id
-WHERE p.status = '"'"'success'"'"' AND o.status IN ('"'"'cancelled'"'"', '"'"'pending'"'"');
-
--- 校验3: 用户不重复
-SELECT COUNT(*) - COUNT(DISTINCT user_id) AS duplicate_users FROM ods_users;
-```
-
-预期: 所有校验返回 0 行（无不一致）。
-
-## 12. 非目标（明确不做的）
+## 13. 非目标（明确不做的）
 
 - ✅ Domino 流计算引擎 → 批处理场景不匹配
 - ✅ 自动降级存储到 S3 → 需要外部基础设施
@@ -872,42 +907,29 @@ SELECT COUNT(*) - COUNT(DISTINCT user_id) AS duplicate_users FROM ods_users;
 - ✅ 数据脱敏/安全/加密 → 不在展示范围内
 - ✅ 集群扩缩容/HA → 单节点 Docker Demo
 
-## 13. 交付物文档框架
+## 14. 交付物文档框架
 
-### 13.1 report.md 内容框架（D1 修复）
+### 14.1 report.md 内容框架
 
 ```
 # YMatrix 数仓端到端 Demo 报告
 
-## 1. 架构概览
-## 2. 数据规模
-## 3. ETL 执行报告
-## 4. 业务指标结果
-## 5. YMatrix 特性展示
-## 6. Grafana 面板
-```
-
-### 13.2 ai_usage.md 内容框架（D2 修复）
+### 14.2 ai_usage.md 内容框架
 
 ```
 # AI 使用记录
-## 使用的 AI 工具: Codex (GPT-5)
-## Prompt 摘要
-## 生成的代码清单
-## 人工修正的内容（留空）
-## 经验教训（留空）
-```
+### 14.3 screenshots/ 目录截图清单
 
-### 13.3 screenshots/ 目录截图清单（D3 修复）
+| #   | 截图内容         | 文件命名              |
+| --- | ---------------- | --------------------- |
+| 1 | Grafana 面板全览 | grafana_dashboard.png | 7 个面板数据非空 |
+| 2 | MARS3 vs HEAP 压缩率对比 | compression_ratio.png | MARS3 节省 50%+ |
+| 3 | ETL 全链路日志 | etl_log.png | 各步骤耗时、行数 |
+| 4 | ADS 七指标查询结果 | ads_metrics.png | 7 个指标返回值正确 |
+| 5 | MySQL 原始数据量 | mysql_row_count.png | 5 表行数符合预期 |
+| 6 | YMatrix 各层表对象 | ym_layer_objects.png | dt 显示完整分层对象 |
 
-| # | 截图内容 | 文件命名 |
-|---|---------|---------|
-| 1 | Grafana 面板全览 | grafana_dashboard.png |
-| 2 | 压缩率对比 | compression_ratio.png |
-| 3 | ETL 日志 | etl_log.png |
-| 4 | ADS 七大指标查询 | ads_metrics.png |
-
-### 13.4 verify/01_compression.sql 内容（D4 修复）
+### 14.4 verify/01_compression.sql 内容
 
 ```sql
 SELECT 'MARS3' AS engine,
@@ -916,4 +938,3 @@ UNION ALL
 SELECT 'HEAP' AS engine,
        pg_size_pretty(pg_total_relation_size('ods_orders_heap'));
 ```
-
