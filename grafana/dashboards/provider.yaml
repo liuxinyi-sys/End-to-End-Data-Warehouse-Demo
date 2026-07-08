@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: YMatrix DW Demo
+    orgId: 1
+    folder: YMatrix
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/provisioning/dashboards
