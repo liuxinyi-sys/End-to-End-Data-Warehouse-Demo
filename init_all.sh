@@ -38,14 +38,14 @@ python gen_data.py
 cd ..
 
 echo "Step 2: Resetting and loading MySQL data..."
-docker-compose exec -T mysql mysql -uroot -proot -D ecommerce -e "SET FOREIGN_KEY_CHECKS=0; TRUNCATE TABLE payments; TRUNCATE TABLE order_items; TRUNCATE TABLE orders; TRUNCATE TABLE products; TRUNCATE TABLE users; SET FOREIGN_KEY_CHECKS=1;"
+docker-compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot -proot -D ecommerce -e "SET FOREIGN_KEY_CHECKS=0; TRUNCATE TABLE payments; TRUNCATE TABLE order_items; TRUNCATE TABLE orders; TRUNCATE TABLE products; TRUNCATE TABLE users; SET FOREIGN_KEY_CHECKS=1;"
 for f in sync/seed_users.sql sync/seed_products.sql sync/seed_orders.sql sync/seed_order_items.sql sync/seed_payments.sql; do
     echo "  Loading $(basename "$f")..."
-    docker-compose exec -T mysql mysql -uroot -proot -D ecommerce < "$f"
+    docker-compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot -proot -D ecommerce < "$f"
 done
 
 echo "Step 3: MySQL verification..."
-docker-compose exec -T mysql mysql -uroot -proot -D ecommerce -e "SELECT 'users' AS table_name, COUNT(*) AS row_count FROM users UNION ALL SELECT 'products', COUNT(*) FROM products UNION ALL SELECT 'orders', COUNT(*) FROM orders UNION ALL SELECT 'order_items', COUNT(*) FROM order_items UNION ALL SELECT 'payments', COUNT(*) FROM payments;"
+docker-compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot -proot -D ecommerce -e "SELECT 'users' AS table_name, COUNT(*) AS row_count FROM users UNION ALL SELECT 'products', COUNT(*) FROM products UNION ALL SELECT 'orders', COUNT(*) FROM orders UNION ALL SELECT 'order_items', COUNT(*) FROM order_items UNION ALL SELECT 'payments', COUNT(*) FROM payments;"
 
 echo "Step 4: Resetting YMatrix warehouse objects..."
 docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -v ON_ERROR_STOP=1 <<'SQL'

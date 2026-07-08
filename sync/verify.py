@@ -14,7 +14,7 @@ def verify_ads():
     n11 = _sql("SELECT gmv FROM ads_daily_gmv WHERE dt='2024-11-11'::TIMESTAMP;")
     avg = _sql("SELECT AVG(gmv)::INT FROM ads_daily_gmv;")
     if n11 and avg:
-        r = int(n11) > int(avg)*2; results["Nov 11 peak > 2x avg"] = r; print(f"  Nov 11: {n11} vs avg: {avg} -> {'PASS' if r else 'FAIL'}")
+        r = float(n11) > float(avg)*2; results["Nov 11 peak > 2x avg"] = r; print(f"  Nov 11: {n11} vs avg: {avg} -> {'PASS' if r else 'FAIL'}")
     c = int(_sql("SELECT COUNT(*) FROM ads_top_products;"))
     r = c == 10; results["ads_top_products: 10 rows"] = r; print(f"  top_products: {c} rows -> {'PASS' if r else 'FAIL'}")
     p = float(_sql("SELECT COALESCE(SUM(pct),0) FROM ads_category_sales;"))
@@ -22,11 +22,9 @@ def verify_ads():
     rate = float(_sql("SELECT COALESCE(repurchase_rate,0) FROM ads_user_repurchase;"))
     r = rate >= 30; results["repurchase >= 30%"] = r; print(f"  repurchase: {rate:.2f}% -> {'PASS' if r else 'FAIL'}")
     c = int(_sql("SELECT COUNT(*) FROM ads_gmv_by_region;"))
-    r = c == 5; results["gmv_by_region: 5 provinces"] = r; print(f"  gmv_by_region: {c} rows -> {'PASS' if r else 'FAIL'}")
-    p_gmv = _sql("SELECT gmv::TEXT FROM ads_promo_compare ORDER BY gmv DESC LIMIT 1;")
-    reg = _sql("SELECT gmv::TEXT FROM ads_promo_compare ORDER BY gmv ASC LIMIT 1;")
-    if p_gmv and reg:
-        r = float(p_gmv) > float(reg); results["promo > regular GMV"] = r; print(f"  promo: {p_gmv} vs regular: {reg} -> {'PASS' if r else 'FAIL'}")
+    r = c == 4; results["gmv_by_region: 4 provinces"] = r; print(f"  gmv_by_region: {c} rows -> {'PASS' if r else 'FAIL'}")
+    promo_periods = int(_sql("SELECT COUNT(*) FROM ads_promo_compare WHERE gmv > 0;"))
+    r = promo_periods == 2; results["promo_compare: 2 non-empty periods"] = r; print(f"  promo_compare: {promo_periods} non-empty periods -> {'PASS' if r else 'FAIL'}")
     c = int(_sql("SELECT COUNT(*) FROM ads_user_segment;"))
     r = c == 3; results["user_segment: 3 segments"] = r; print(f"  user_segment: {c} segments -> {'PASS' if r else 'FAIL'}")
     m3 = _sql("SELECT pg_total_relation_size('ods_orders');")

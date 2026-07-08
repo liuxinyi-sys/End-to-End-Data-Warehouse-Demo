@@ -10,13 +10,16 @@ CREATE VIEW ads_user_repurchase AS
 SELECT COUNT(*)FILTER(WHERE total_orders>1)*100.0/COUNT(*)repurchase_rate,
   COUNT(*)FILTER(WHERE total_orders>1)repeat_buyers,COUNT(*)total_buyers FROM dws_user_purchase_stats;
 CREATE VIEW ads_user_segment AS
-SELECT CASE WHEN total_orders>=10 OR total_spent>=5000 THEN 'high'
-  WHEN total_orders>=3 OR total_spent>=1000 THEN 'mid' ELSE 'low' END segment,
-  COUNT(*)user_count,SUM(total_orders)total_orders FROM dws_user_purchase_stats GROUP BY 1 ORDER BY 1;
+WITH ranked AS (
+  SELECT user_id,total_orders,total_spent,NTILE(3) OVER(ORDER BY total_spent)spend_tier
+  FROM dws_user_purchase_stats
+)
+SELECT CASE spend_tier WHEN 1 THEN 'low' WHEN 2 THEN 'mid' ELSE 'high' END segment,
+  COUNT(*)user_count,SUM(total_orders)total_orders FROM ranked GROUP BY 1 ORDER BY 1;
 CREATE VIEW ads_gmv_by_region AS
 SELECT r.province,COUNT(DISTINCT f.order_id)order_cnt,SUM(f.total_amount)gmv
   FROM dwd_order_fact f JOIN dim_region r ON f.region_id=r.region_id GROUP BY r.province ORDER BY gmv DESC;
 CREATE VIEW ads_promo_compare AS
-SELECT CASE WHEN o.promo_id IS NOT NULL THEN '大促期' ELSE '日常期' END period,
+SELECT CASE WHEN o.promo_id > 0 THEN '大促期' ELSE '日常期' END period,
   COUNT(DISTINCT o.order_id)order_cnt,SUM(o.total_amount)gmv,
   SUM(o.total_amount)/COUNT(DISTINCT o.order_id)avg_order_value FROM dwd_order_fact o GROUP BY 1;

@@ -14,13 +14,16 @@ def _gate(target, rows):
     before = _count(target)
     buf = io.StringIO()
     rows.to_csv(buf, index=False, header=False)
-    subprocess.run(["docker-compose","exec","-T","ymatrix","/opt/ymatrix/matrixdb5/bin/mxgate","--source","stdin","--db-database","dw_demo",
+    result = subprocess.run(["docker-compose","exec","-T","ymatrix","/opt/ymatrix/matrixdb5/bin/mxgate","--source","stdin","--db-database","dw_demo",
         "--db-master-host","localhost","--db-master-port","5432","--db-user","mxadmin",
         "--target",target,"--parallel","16","--delimiter",",","--time-format","raw"],
-        input=buf.getvalue().encode("utf-8"), check=True)
+        input=buf.getvalue().encode("utf-8"), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if result.returncode != 0:
+        raise RuntimeError(result.stdout.decode("utf-8", errors="replace"))
     loaded = _count(target) - before
     if loaded != len(rows):
-        raise RuntimeError(f"mxgate loaded {loaded} of {len(rows)} rows into {target}")
+        output = result.stdout.decode("utf-8", errors="replace")
+        raise RuntimeError(f"mxgate loaded {loaded} of {len(rows)} rows into {target}\n{output}")
 
 def load_dim_product(ods_products):
     _psql("TRUNCATE dim_product;")

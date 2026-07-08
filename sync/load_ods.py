@@ -17,10 +17,14 @@ def _gate(target: str, df: pd.DataFrame):
            "--time-format","raw"]
     buf = io.StringIO()
     df.to_csv(buf, index=False, header=False)
-    subprocess.run(cmd, input=buf.getvalue().encode("utf-8"), check=True)
+    result = subprocess.run(cmd, input=buf.getvalue().encode("utf-8"),
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if result.returncode != 0:
+        raise RuntimeError(result.stdout.decode("utf-8", errors="replace"))
     loaded = _count(target) - before
     if loaded != len(df):
-        raise RuntimeError(f"mxgate loaded {loaded} of {len(df)} rows into {target}")
+        output = result.stdout.decode("utf-8", errors="replace")
+        raise RuntimeError(f"mxgate loaded {loaded} of {len(df)} rows into {target}\n{output}")
 
 def load_ods_users(df):
     rows = df[["user_id","name","email","register_date","city","province","status"]].copy()

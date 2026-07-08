@@ -3,7 +3,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 from typing import Dict
 
-MYSQL_URI = "mysql+pymysql://root:root@localhost:3306/ecommerce"
+MYSQL_URI = "mysql+pymysql://root:root@localhost:3306/ecommerce?charset=utf8mb4"
 TABLES = ["users", "products", "orders", "order_items", "payments"]
 
 def extract_all() -> Dict[str, pd.DataFrame]:
