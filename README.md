@@ -33,7 +33,6 @@ certutil -hashfile ymatrix/matrixdb5_5.2.1+community-1_amd64.deb MD5
 
 ### 3. 启动服务
 ```bash
-docker-compose build   # 构建 MatrixDB 镜像（含 .deb 安装）
 docker-compose up -d   # 启动 MySQL + YMatrix + Grafana
 ```
 
@@ -41,6 +40,8 @@ docker-compose up -d   # 启动 MySQL + YMatrix + Grafana
 ```bash
 bash init_all.sh       # 一键初始化: init SQL -> 生成数据 -> ETL -> 验证
 ```
+
+`init_all.sh` 可以在不删除 Docker volumes 的情况下重复执行；脚本只重置本 Demo 的 MySQL 数据和 YMatrix 数仓对象。当前 Compose 配置要求本机已有 `ymatrix5.2-clean:latest` 镜像。
 
 ## 配置说明
 

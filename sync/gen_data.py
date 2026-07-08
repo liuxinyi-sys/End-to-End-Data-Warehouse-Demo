@@ -53,9 +53,8 @@ def gen_orders(num=50000):
         elif r < 0.85: st = "paid"
         elif r < 0.95: st = "shipped"
         else: st = "cancelled"
-        ni = random.choices([1,2,3,4,5,6], weights=[15,30,25,15,10,5])[0]
         total = 0.0
-        for _ in range(ni):
+        for _ in range(4):
             prod = random.randint(1, 500)
             qty = random.choices([1,2,3], weights=[60,30,10])[0]
             up = round(random.uniform(19.9, 9999.0), 2)
@@ -65,11 +64,10 @@ def gen_orders(num=50000):
             item_id += 1
         total = round(total, 2)
         order_vals.append(f"({oid},{uid},{od},'{st}',{total},{pid})")
-        if random.random() < 0.95:
-            method = random.choices(["支付宝","微信","银行卡"], weights=[40,40,20])[0]
-            pd_ = f"DATE_ADD('2024-01-01',INTERVAL {day+random.randint(0,2)} DAY)"
-            pay_vals.append(f"({pay_id},{oid},'{method}',{pd_},{total},'completed')")
-            pay_id += 1
+        method = random.choices(["支付宝","微信","银行卡"], weights=[40,40,20])[0]
+        pd_ = f"DATE_ADD('2024-01-01',INTERVAL {day+random.randint(0,2)} DAY)"
+        pay_vals.append(f"({pay_id},{oid},'{method}',{pd_},{total},'completed')")
+        pay_id += 1
     for name, vals in [("seed_orders.sql",order_vals),("seed_order_items.sql",item_vals),("seed_payments.sql",pay_vals)]:
         tbl = name.split("_",1)[1].replace(".sql","")
         with open(name,"w",encoding="utf-8") as f:
