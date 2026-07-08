@@ -35,3 +35,9 @@ CREATE TABLE ods_orders_heap (
     order_id INT, user_id INT, order_date DATE, status VARCHAR(20),
     total_amount NUMERIC(10,2), promo_id INT, sync_time TIMESTAMP
 ) USING HEAP DISTRIBUTED BY (order_id);
+
+CREATE TABLE ods_orders_mars_compare (
+    order_id INT, user_id INT, order_date DATE, status VARCHAR(20),
+    total_amount NUMERIC(10,2), promo_id INT, sync_time TIMESTAMP
+) USING MARS3 WITH (compresstype='lz4', compresslevel=7)
+DISTRIBUTED BY (order_id) ORDER BY (order_date, order_id);

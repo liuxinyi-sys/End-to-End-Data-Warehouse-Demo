@@ -17,6 +17,11 @@ if [ ! -f "$MASTER_DATA_DIRECTORY/postgresql.conf" ]; then
     exit 1
 fi
 
+HBA_RULE="host all all samenet md5"
+if ! grep -Fqx "$HBA_RULE" "$MASTER_DATA_DIRECTORY/pg_hba.conf"; then
+    echo "$HBA_RULE" >> "$MASTER_DATA_DIRECTORY/pg_hba.conf"
+fi
+
 /usr/sbin/sshd || true
 
 if ! run_as_mxadmin "psql -h localhost -p 5432 -d postgres -tAc 'SELECT 1'" >/dev/null 2>&1; then

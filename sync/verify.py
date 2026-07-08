@@ -27,7 +27,7 @@ def verify_ads():
     r = promo_periods == 2; results["promo_compare: 2 non-empty periods"] = r; print(f"  promo_compare: {promo_periods} non-empty periods -> {'PASS' if r else 'FAIL'}")
     c = int(_sql("SELECT COUNT(*) FROM ads_user_segment;"))
     r = c == 3; results["user_segment: 3 segments"] = r; print(f"  user_segment: {c} segments -> {'PASS' if r else 'FAIL'}")
-    m3 = _sql("SELECT pg_total_relation_size('ods_orders');")
+    m3 = _sql("SELECT pg_total_relation_size('ods_orders_mars_compare');")
     hp = _sql("SELECT pg_total_relation_size('ods_orders_heap');")
     if m3 and hp and int(hp) > 0:
         ratio = (1-int(m3)/int(hp))*100; r = ratio >= 50

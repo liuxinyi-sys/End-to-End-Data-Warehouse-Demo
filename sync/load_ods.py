@@ -1,6 +1,8 @@
 """Load data into ODS layer via mxgate stdin."""
 import subprocess, io, pandas as pd
 
+COMPRESSION_SAMPLE_COPIES = 40
+
 def _count(target: str) -> int:
     result = subprocess.run([
         "docker-compose","exec","-T","ymatrix","/opt/ymatrix/matrixdb5/bin/psql",
@@ -26,6 +28,25 @@ def _gate(target: str, df: pd.DataFrame):
         output = result.stdout.decode("utf-8", errors="replace")
         raise RuntimeError(f"mxgate loaded {loaded} of {len(df)} rows into {target}\n{output}")
 
+def _build_compression_sample(source_rows: int):
+    columns = "order_id,user_id,order_date,status,total_amount,promo_id,sync_time"
+    sql = (
+        "INSERT INTO ods_orders_mars_compare "
+        f"SELECT {columns} FROM ods_orders CROSS JOIN generate_series(1,{COMPRESSION_SAMPLE_COPIES}); "
+        "INSERT INTO ods_orders_heap "
+        f"SELECT {columns} FROM ods_orders CROSS JOIN generate_series(1,{COMPRESSION_SAMPLE_COPIES});"
+    )
+    subprocess.run([
+        "docker-compose","exec","-T","ymatrix","/opt/ymatrix/matrixdb5/bin/psql",
+        "-h","localhost","-p","5432","-U","mxadmin","-d","dw_demo",
+        "-v","ON_ERROR_STOP=1","-c",sql
+    ], check=True)
+    expected = source_rows * COMPRESSION_SAMPLE_COPIES
+    for target in ("ods_orders_mars_compare", "ods_orders_heap"):
+        actual = _count(target)
+        if actual != expected:
+            raise RuntimeError(f"compression sample {target} has {actual} rows, expected {expected}")
+
 def load_ods_users(df):
     rows = df[["user_id","name","email","register_date","city","province","status"]].copy()
     rows["sync_time"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -40,7 +61,7 @@ def load_ods_orders(df):
     rows = df[["order_id","user_id","order_date","status","total_amount","promo_id"]].copy()
     rows["sync_time"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     _gate("ods_orders", rows)
-    _gate("ods_orders_heap", rows)
+    _build_compression_sample(len(rows))
     return len(rows)
 
 def load_ods_order_items(df):
