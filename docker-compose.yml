@@ -1,0 +1,89 @@
+﻿name: end-to-end-data-warehouse-demo
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: e2e-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ecommerce
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - default
+
+  ymatrix:
+    image: ymatrix5.2-clean:latest                      # 使用构建好的ymatrix镜像
+    pull_policy: never 
+    hostname: ymatrix-master
+    container_name: e2e-ymatrix
+    restart: unless-stopped
+    entrypoint: []                          # 清空默认 entrypoint
+    command: ["/bin/bash", "/docker-entrypoint.sh"]
+    environment:
+      MATRIXDB_USER: mxadmin
+      MATRIXDB_PASSWORD: mxadmin123
+      MATRIXDB_DB: dw_demo
+      PGPORT: 5432
+      PGPASSWORD: mxadmin123
+      FORCE_REINIT: "true"
+    ports:
+      - "5432:5432"
+      - "8090:8090"                         # 保留，若未来有 Web UI
+    volumes:
+      - ./ymatrix/docker-entrypoint.sh:/docker-entrypoint.sh:ro
+      - ./ymatrix/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=mxadmin123 /opt/ymatrix/matrixdb5/bin/psql -h localhost -p 5432 -U mxadmin -d dw_demo -tAc 'SELECT 1' | grep -qx 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - default
+    privileged: true                        # 可能需要，但非必须
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: e2e-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      ymatrix:
+        condition: service_healthy
+    networks:
+      - default
+
+networks:
+  default:
+    name: end-to-end-data-warehouse-demo_default
+    driver: bridge
+
+volumes:
+  mysql-data:
+    name: end-to-end-data-warehouse-demo_mysql-data
+  ym-data:
+    name: end-to-end-data-warehouse-demo_ym-data
+  ym-logs:
+    name: end-to-end-data-warehouse-demo_ym-logs
+  grafana-data:
+    name: end-to-end-data-warehouse-demo_grafana-data

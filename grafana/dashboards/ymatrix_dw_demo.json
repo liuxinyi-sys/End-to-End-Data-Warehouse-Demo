@@ -1,0 +1,18 @@
+{"title":"YMatrix DW Demo","timezone":"Asia/Shanghai","panels":[
+{"id":1,"title":"每日 GMV 趋势","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},
+ "datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"},"targets":[{"refId":"A","rawQuery":true,"rawSql":"SELECT dt AS time, gmv, order_count FROM ads_daily_gmv ORDER BY dt","format":"time_series","datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"}}],
+ "fieldConfig":{"defaults":{"unit":"currencyCNY","custom":{"lineInterpolation":"smooth"}}}},
+{"id":2,"title":"商品销售 Top 10","type":"table","gridPos":{"h":8,"w":6,"x":12,"y":0},
+ "datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"},"targets":[{"refId":"A","rawQuery":true,"rawSql":"SELECT product_name,category,total_qty,total_revenue FROM ads_top_products","format":"table","datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"}}]},
+{"id":3,"title":"品类销售占比","type":"piechart","gridPos":{"h":8,"w":6,"x":18,"y":0},
+ "datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"},"targets":[{"refId":"A","rawQuery":true,"rawSql":"SELECT category,revenue,pct FROM ads_category_sales ORDER BY revenue DESC","format":"table","datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"}}],
+ "options":{"pieType":"pie","displayLabels":["percent","name"]}},
+{"id":4,"title":"用户复购率","type":"stat","gridPos":{"h":6,"w":6,"x":0,"y":8},
+ "datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"},"targets":[{"refId":"A","rawQuery":true,"rawSql":"SELECT repurchase_rate FROM ads_user_repurchase","format":"table","datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"}}],
+ "fieldConfig":{"defaults":{"unit":"percent","color":{"mode":"thresholds"},"thresholds":{"steps":[{"value":0,"color":"red"},{"value":30,"color":"yellow"},{"value":50,"color":"green"}]}}}},
+{"id":5,"title":"GMV 按省份分布","type":"barchart","gridPos":{"h":6,"w":6,"x":6,"y":8},
+ "datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"},"targets":[{"refId":"A","rawQuery":true,"rawSql":"SELECT province,order_cnt,gmv FROM ads_gmv_by_region ORDER BY gmv DESC","format":"table","datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"}}]},
+{"id":6,"title":"促销 vs 日常","type":"bargauge","gridPos":{"h":6,"w":12,"x":12,"y":8},
+ "datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"},"targets":[{"refId":"A","rawQuery":true,"rawSql":"SELECT period,order_cnt,gmv,avg_order_value FROM ads_promo_compare","format":"table","datasource":{"type":"grafana-postgresql-datasource","uid":"ymatrix-dw-demo"}}],
+ "options":{"orientation":"horizontal","showUnfilled":true}}
+],"uid":"ymatrix-warehouse-demo","time":{"from":"2024-01-01T00:00:00.000Z","to":"2024-12-31T23:59:59.999Z"},"refresh":"5s"}
