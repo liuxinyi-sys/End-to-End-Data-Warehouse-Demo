@@ -11,6 +11,7 @@ function Assert-Contains($path, $pattern, $message) {
 Assert-Contains 'docker-compose.yml' 'ymatrix/init:/docker-entrypoint-initdb.d:ro' 'YMatrix SQL mount missing'
 Assert-Contains 'docker-compose.yml' 'grafana/dashboards:/etc/grafana/provisioning/dashboards' 'Grafana dashboard mount missing'
 Assert-Contains 'init_all.sh' 'ON_ERROR_STOP=1' 'YMatrix SQL is not fail-fast'
+Assert-Contains 'init_all.sh' 'MSYS_NO_PATHCONV=1' 'Git Bash container path conversion is not disabled'
 Assert-Contains 'ymatrix/init/01_init.sql' 'season VARCHAR\(10\)' 'season column is too short'
 Assert-Contains 'ymatrix/init/02_ods.sql' 'ORDER BY \(user_id\)' 'ods_users lacks a MARS3 order key'
 Assert-Contains 'ymatrix/init/02_ods.sql' 'ORDER BY \(product_id\)' 'ods_products lacks a MARS3 order key'
