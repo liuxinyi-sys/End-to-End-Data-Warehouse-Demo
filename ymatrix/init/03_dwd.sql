@@ -6,7 +6,7 @@ CREATE TABLE dwd_order_fact (
 ) USING MARS3 WITH (compresstype='lz4', compresslevel=7)
 DISTRIBUTED BY (order_id) ORDER BY (order_date, order_id)
 PARTITION BY RANGE (order_date)
-( START (DATE '2024-01-01') INCLUSIVE END (DATE '2025-01-01') EXCLUSIVE EVERY (INTERVAL '1 day') );
+( START (DATE '2024-01-01') INCLUSIVE END (DATE '2025-01-01') EXCLUSIVE EVERY (INTERVAL '1 month') );
 
 CREATE TABLE dwd_order_detail_fact (
     detail_id INT, order_id INT, user_id INT, sku_id INT, order_date DATE,
@@ -15,4 +15,4 @@ CREATE TABLE dwd_order_detail_fact (
 ) USING MARS3 WITH (compresstype='lz4', compresslevel=7)
 DISTRIBUTED BY (detail_id) ORDER BY (order_date, detail_id)
 PARTITION BY RANGE (order_date)
-( START (DATE '2024-01-01') INCLUSIVE END (DATE '2025-01-01') EXCLUSIVE EVERY (INTERVAL '1 day') );
+( START (DATE '2024-01-01') INCLUSIVE END (DATE '2025-01-01') EXCLUSIVE EVERY (INTERVAL '1 month') );
