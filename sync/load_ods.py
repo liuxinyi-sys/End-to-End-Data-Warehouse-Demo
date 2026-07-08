@@ -2,14 +2,12 @@
 import subprocess, io, pandas as pd
 
 def _gate(target: str, df: pd.DataFrame):
-    cmd = ["mxgate","--source","stdin","--db-database","dw_demo",
+    cmd = ["docker-compose","exec","-T","ymatrix","mxgate","--source","stdin","--db-database","dw_demo",
            "--db-master-host","localhost","--db-master-port","5432",
-           "--db-user","mxadmin","--target",target,"--parallel","256","--delimiter",","]
+           "--db-user","mxadmin","--target",target,"--parallel","16","--delimiter",","]
     buf = io.StringIO()
     df.to_csv(buf, index=False, header=False)
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, text=True)
-    proc.communicate(buf.getvalue())
-    return proc.wait()
+    subprocess.run(cmd, input=buf.getvalue(), text=True, check=True)
 
 def load_ods_users(df):
     rows = df[["user_id","name","email","register_date","city","province","status"]].copy()
@@ -24,7 +22,9 @@ def load_ods_products(df):
 def load_ods_orders(df):
     rows = df[["order_id","user_id","order_date","status","total_amount","promo_id"]].copy()
     rows["sync_time"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-    _gate("ods_orders", rows); return len(rows)
+    _gate("ods_orders", rows)
+    _gate("ods_orders_heap", rows)
+    return len(rows)
 
 def load_ods_order_items(df):
     rows = df[["item_id","order_id","product_id","qty","unit_price"]].copy()

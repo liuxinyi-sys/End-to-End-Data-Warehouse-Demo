@@ -2,7 +2,9 @@
 import subprocess, sys
 
 def _sql(cmd):
-    r = subprocess.run(["psql","-h","localhost","-p","5432","-U","mxadmin","-d","dw_demo","-t","-A","-c",cmd],capture_output=True,text=True)
+    r = subprocess.run(["docker-compose","exec","-T","ymatrix","/opt/ymatrix/matrixdb5/bin/psql",
+        "-h","localhost","-p","5432","-U","mxadmin","-d","dw_demo","-v","ON_ERROR_STOP=1","-t","-A","-c",cmd],
+        capture_output=True,text=True,check=True)
     return r.stdout.strip()
 
 def verify_ads():
