@@ -106,7 +106,7 @@ Grafana 仪表盘: [http://localhost:3000](http://localhost:3000)
 
 - 业务时区: `Asia/Shanghai`
 - 源时间字段: `orders.order_date` 和 `payments.pay_date` 保留源名，升级为毫秒级时间戳 (`DATETIME(3)`)
-- DWD 语义字段: `order_time`、`pay_time`、`order_date`，在 DWD 层通过 `AT TIME ZONE 'Asia/Shanghai'` 显式转换
+- DWD 语义字段: `order_time`、`pay_time`、`order_date`，ODS 的 `TIMESTAMP(3)` 已存储为 Asia/Shanghai 本地时间，DWD 直接继承
 
 ## 已知限制
 
