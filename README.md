@@ -59,11 +59,11 @@ docker-compose build ymatrix
 ### 3.1 克隆仓库
 
 ```bash
-git clone https://github.com/liuxinyi-sys/End-to-End-Data-Warehouse-Demo.git
+git clone https://github.com/liuxinyi-star/End-to-End-Data-Warehouse-Demo.git
 cd End-to-End-Data-Warehouse-Demo
 ```
 
-### 3.2 构建YMatrix 镜像（首次运行）
+### 3.2 构建 ymatrix5.2-clean:latest 镜像（首次运行）
 
 ```bash
 docker-compose build ymatrix
