@@ -187,23 +187,34 @@ cd sync && python sync_data.py && cd ..
 ### 5.3 分步执行
 
 ```bash
-# 1. 生成种子数据
+# 1. 生成种子数据（默认 20 万订单）
 cd sync && python gen_data.py && cd ..
 
-# 2. 加载 CSV 到 MySQL
-docker-compose exec -T mysql mysql --local-infile=1 -uroot -proot -e "SET GLOBAL local_infile=1;"
-docker-compose exec -T mysql mysql --local-infile=1 -uroot -proot -D ecommerce -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE users FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n';" < sync/seed_users.csv
-# ... 其他表同理
+# 2. 开启 MySQL local_infile 并清空旧数据
+docker-compose exec -T mysql mysql -uroot -proot -e "SET GLOBAL local_infile=1;"
+docker-compose exec -T mysql mysql -uroot -proot -D ecommerce -e "SET FOREIGN_KEY_CHECKS=0; TRUNCATE TABLE order_status_events; TRUNCATE TABLE payments; TRUNCATE TABLE order_items; TRUNCATE TABLE orders; TRUNCATE TABLE products; TRUNCATE TABLE users; SET FOREIGN_KEY_CHECKS=1;"
 
-# 3. 创建 YMatrix schema
+# 3. 逐表加载 CSV 到 MySQL
+docker-compose exec -T mysql mysql --local-infile=1 -uroot -proot -D ecommerce -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE users FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\n';" < sync/seed_users.csv
+docker-compose exec -T mysql mysql --local-infile=1 -uroot -proot -D ecommerce -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE products FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\n';" < sync/seed_products.csv
+docker-compose exec -T mysql mysql --local-infile=1 -uroot -proot -D ecommerce -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE orders FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\n';" < sync/seed_orders.csv
+docker-compose exec -T mysql mysql --local-infile=1 -uroot -proot -D ecommerce -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE order_items FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\n';" < sync/seed_order_items.csv
+docker-compose exec -T mysql mysql --local-infile=1 -uroot -proot -D ecommerce -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE payments FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\n';" < sync/seed_payments.csv
+docker-compose exec -T mysql mysql --local-infile=1 -uroot -proot -D ecommerce -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE order_status_events FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\n';" < sync/seed_order_status_events.csv
+
+# 4. 验证 MySQL 数据
+docker-compose exec -T mysql mysql -uroot -proot -D ecommerce -e "SELECT 'users' AS t, COUNT(*) AS n FROM users UNION ALL SELECT 'products', COUNT(*) FROM products UNION ALL SELECT 'orders', COUNT(*) FROM orders UNION ALL SELECT 'order_items', COUNT(*) FROM order_items UNION ALL SELECT 'payments', COUNT(*) FROM payments UNION ALL SELECT 'order_status_events', COUNT(*) FROM order_status_events;"
+
+# 5. 创建 YMatrix schema（按编号顺序执行 init SQL）
 for f in ymatrix/init/*.sql; do
-    docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -v ON_ERROR_STOP=1 -f "/docker-entrypoint-initdb.d/$(basename $f)"
+    echo "Running $(basename "$f")..."
+    docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -v ON_ERROR_STOP=1 -f "/docker-entrypoint-initdb.d/$(basename "$f")"
 done
 
-# 4. 执行 ETL
+# 6. 执行 ETL Pipeline（extract → transform → load_ods → load_dim → load_dwd → refresh）
 cd sync && python sync_data.py && cd ..
 
-# 5. 验证
+# 7. 运行自动化验证（21 项断言）
 cd sync && python verify.py && cd ..
 ```
 
