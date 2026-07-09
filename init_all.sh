@@ -34,7 +34,6 @@ echo "All services are ready."
 
 echo "Step 1: Generating seed data"
 export ORDER_COUNT="${ORDER_COUNT:-200000}"
-export SEED_OUTPUT_DIR="${SEED_OUTPUT_DIR:-$(pwd)/sync}"
 cd sync
 python gen_data.py
 cd ..

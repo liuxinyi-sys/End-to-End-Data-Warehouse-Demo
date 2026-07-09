@@ -52,7 +52,7 @@ def money(value):
 def write_csv(filename, rows):
     path = os.path.join(OUTPUT_DIR, filename)
     with open(path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         for row in rows:
             writer.writerow(row)
     return path
@@ -217,10 +217,10 @@ def gen_orders(products, weighted_user_ids, num=DEFAULT_ORDER_COUNT):
     ) as item_handle, open(payment_path, "w", newline="", encoding="utf-8") as payment_handle, open(
         event_path, "w", newline="", encoding="utf-8"
     ) as event_handle:
-        order_writer = csv.writer(order_handle)
-        item_writer = csv.writer(item_handle)
-        payment_writer = csv.writer(payment_handle)
-        event_writer = csv.writer(event_handle)
+        order_writer = csv.writer(order_handle, lineterminator="\n")
+        item_writer = csv.writer(item_handle, lineterminator="\n")
+        payment_writer = csv.writer(payment_handle, lineterminator="\n")
+        event_writer = csv.writer(event_handle, lineterminator="\n")
 
         for order_id in range(1, num + 1):
             user_id = random.choice(weighted_user_ids)

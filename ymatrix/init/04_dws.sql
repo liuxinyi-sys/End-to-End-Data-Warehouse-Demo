@@ -17,11 +17,11 @@ WHERE status IN ('paid','shipped','completed')
 GROUP BY bucket_time DISTRIBUTED BY (bucket_time);
 
 CREATE MATERIALIZED VIEW dws_product_daily_sales AS
-SELECT order_date, sku_id, SUM(sku_num) AS total_qty, SUM(line_amount) AS total_revenue
+SELECT d.order_date AS order_date, d.sku_id AS sku_id, SUM(d.sku_num) AS total_qty, SUM(d.line_amount) AS total_revenue
 FROM dwd_order_detail_fact d
 JOIN dwd_order_fact f ON d.order_id=f.order_id
 WHERE f.status IN ('paid','shipped','completed')
-GROUP BY order_date, sku_id DISTRIBUTED BY (order_date);
+GROUP BY d.order_date, d.sku_id DISTRIBUTED BY (order_date);
 
 CREATE MATERIALIZED VIEW dws_user_purchase_stats AS
 SELECT user_id, COUNT(*) AS total_orders, SUM(total_amount) AS total_spent

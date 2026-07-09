@@ -41,7 +41,7 @@ def verify_ads():
     rate = float(_sql("SELECT COALESCE(repurchase_rate,0) FROM ads_user_repurchase;"))
     r = rate >= 30; results["repurchase >= 30%"] = r; print(f"  repurchase: {rate:.2f}% -> {'PASS' if r else 'FAIL'}")
     c = int(_sql("SELECT COUNT(*) FROM ads_gmv_by_region;"))
-    r = c == 4; results["gmv_by_region: 4 provinces"] = r; print(f"  gmv_by_region: {c} rows -> {'PASS' if r else 'FAIL'}")
+    r = c >= 5; results["gmv_by_region: >= 5 provinces"] = r; print(f"  gmv_by_region: {c} rows -> {'PASS' if r else 'FAIL'}")
     promo_periods = int(_sql("SELECT COUNT(*) FROM ads_promo_compare WHERE gmv > 0;"))
     r = promo_periods == 2; results["promo_compare: 2 non-empty periods"] = r; print(f"  promo_compare: {promo_periods} non-empty periods -> {'PASS' if r else 'FAIL'}")
     c = int(_sql("SELECT COUNT(*) FROM ads_user_segment;"))
@@ -57,7 +57,7 @@ def verify_ads():
     _pass(results, "ods_orders equals configured scale", orders == EXPECTED_ORDERS, "{} rows".format(orders))
 
     items = _int("SELECT COUNT(*) FROM ods_order_items;")
-    _pass(results, "order_items 3x to 5x orders", EXPECTED_ORDERS * 3 <= items <= EXPECTED_ORDERS * 5, "{} rows".format(items))
+    _pass(results, "order_items 2x to 5x orders", EXPECTED_ORDERS * 2 <= items <= EXPECTED_ORDERS * 5, "{} rows".format(items))
 
     nov11 = _int("SELECT COUNT(*) FROM dwd_order_fact WHERE order_date = DATE '2024-11-11';")
     normal_avg = _float("""

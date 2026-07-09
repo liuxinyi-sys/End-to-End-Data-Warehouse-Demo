@@ -21,16 +21,16 @@ def run_all():
     SELECT
       o.order_id,
       o.user_id,
-      DATE(o.order_date AT TIME ZONE 'Asia/Shanghai') AS order_date,
-      o.order_date AT TIME ZONE 'Asia/Shanghai' AS order_time,
+      DATE(o.order_date) AS order_date,
+      o.order_date AS order_time,
       COALESCE(r.region_id,0),
       COALESCE(o.promo_id,0),
       o.total_amount,
       CASE WHEN o.total_amount >= 200 THEN 0 ELSE ROUND((RANDOM()*7+8)::NUMERIC,2) END,
       ROUND(COALESCE(d.discount_amount, 0), 2),
-      p.pay_date AT TIME ZONE 'Asia/Shanghai' AS pay_time,
-      CASE WHEN o.status='cancelled' THEN e_cancel.event_time AT TIME ZONE 'Asia/Shanghai' ELSE NULL END,
-      CASE WHEN o.status='completed' THEN e_finish.event_time AT TIME ZONE 'Asia/Shanghai' ELSE NULL END,
+      p.pay_date AS pay_time,
+      CASE WHEN o.status='cancelled' THEN e_cancel.event_time ELSE NULL END,
+      CASE WHEN o.status='completed' THEN e_finish.event_time ELSE NULL END,
       CASE MOD(o.order_id,10) WHEN 0 THEN 'miniapp' WHEN 1 THEN 'miniapp' WHEN 2 THEN 'web' WHEN 3 THEN 'web' WHEN 4 THEN 'web' ELSE 'app' END,
       o.status
     FROM ods_orders o
@@ -60,8 +60,8 @@ def run_all():
       oi.order_id,
       o.user_id,
       oi.product_id,
-      DATE(o.order_date AT TIME ZONE 'Asia/Shanghai') AS order_date,
-      o.order_date AT TIME ZONE 'Asia/Shanghai' AS order_time,
+      DATE(o.order_date) AS order_date,
+      o.order_date AS order_time,
       COALESCE(r.region_id,0),
       COALESCE(o.promo_id,0),
       oi.qty,
@@ -89,8 +89,8 @@ def run_all():
       o.user_id,
       e.from_status,
       e.to_status,
-      e.event_time AT TIME ZONE 'Asia/Shanghai',
-      DATE(e.event_time AT TIME ZONE 'Asia/Shanghai'),
+      e.event_time AS event_time,
+      DATE(e.event_time) AS event_date,
       e.operator_type
     FROM ods_order_status_events e
     JOIN ods_orders o ON e.order_id=o.order_id;""")
