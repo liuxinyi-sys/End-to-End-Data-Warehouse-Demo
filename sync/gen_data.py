@@ -265,7 +265,7 @@ def gen_orders(products, weighted_user_ids, num=DEFAULT_ORDER_COUNT):
                 continue
 
             paid_time = order_time + timedelta(minutes=random.randint(0, 10), milliseconds=random.randint(0, 999))
-            write_event(event_writer, event_id, order_id, "created", "paid", paid_time)
+            write_event(event_writer, event_id, order_id, "created", "paid", paid_time, "payment")
             event_id += 1
             event_count += 1
 
