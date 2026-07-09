@@ -17,7 +17,7 @@ def _gate(target, rows):
     result = subprocess.run(["docker-compose","exec","-T","ymatrix","/opt/ymatrix/matrixdb5/bin/mxgate","--source","stdin","--db-database","dw_demo",
         "--db-master-host","localhost","--db-master-port","5432","--db-user","mxadmin",
         "--target",target,"--parallel","16","--delimiter",",","--time-format","raw"],
-        input=buf.getvalue().encode("utf-8"), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        input=buf.getvalue().replace("\r\n", "\n").encode("utf-8"), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if result.returncode != 0:
         raise RuntimeError(result.stdout.decode("utf-8", errors="replace"))
     loaded = _count(target) - before

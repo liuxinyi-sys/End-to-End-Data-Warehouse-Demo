@@ -12,6 +12,9 @@ def _count(target: str) -> int:
     return int(result.stdout.strip())
 
 def _gate(target: str, df: pd.DataFrame):
+    subprocess.run(["docker-compose","exec","-T","ymatrix","/opt/ymatrix/matrixdb5/bin/psql",
+        "-h","localhost","-p","5432","-U","mxadmin","-d","dw_demo","-v","ON_ERROR_STOP=1","-c",
+        f"TRUNCATE {target};"], capture_output=True, text=True, check=True)
     before = _count(target)
     cmd = ["docker-compose","exec","-T","ymatrix","/opt/ymatrix/matrixdb5/bin/mxgate","--source","stdin","--db-database","dw_demo",
            "--db-master-host","localhost","--db-master-port","5432",
@@ -19,7 +22,7 @@ def _gate(target: str, df: pd.DataFrame):
            "--time-format","raw"]
     buf = io.StringIO()
     df.to_csv(buf, index=False, header=False)
-    result = subprocess.run(cmd, input=buf.getvalue().encode("utf-8"),
+    result = subprocess.run(cmd, input=buf.getvalue().replace("\r\n", "\n").encode("utf-8"),
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if result.returncode != 0:
         raise RuntimeError(result.stdout.decode("utf-8", errors="replace"))
@@ -30,6 +33,11 @@ def _gate(target: str, df: pd.DataFrame):
 
 def _build_compression_sample(source_rows: int):
     columns = "order_id,user_id,order_date,status,total_amount,promo_id,sync_time"
+    subprocess.run([
+        "docker-compose","exec","-T","ymatrix","/opt/ymatrix/matrixdb5/bin/psql",
+        "-h","localhost","-p","5432","-U","mxadmin","-d","dw_demo",
+        "-v","ON_ERROR_STOP=1","-c","TRUNCATE ods_orders_mars_compare; TRUNCATE ods_orders_heap;"
+    ], check=True)
     sql = (
         "INSERT INTO ods_orders_mars_compare "
         f"SELECT {columns} FROM ods_orders CROSS JOIN generate_series(1,{COMPRESSION_SAMPLE_COPIES}); "
@@ -74,8 +82,13 @@ def load_ods_payments(df):
     rows["sync_time"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     _gate("ods_payments", rows); return len(rows)
 
+def load_ods_order_status_events(df):
+    rows = df[["event_id","order_id","from_status","to_status","event_time","operator_type"]].copy()
+    rows["sync_time"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+    _gate("ods_order_status_events", rows); return len(rows)
+
 def load_all(dfs):
-    loaders = {"users":load_ods_users,"products":load_ods_products,"orders":load_ods_orders,"order_items":load_ods_order_items,"payments":load_ods_payments}
+    loaders = {"users":load_ods_users,"products":load_ods_products,"orders":load_ods_orders,"order_items":load_ods_order_items,"payments":load_ods_payments,"order_status_events":load_ods_order_status_events}
     result = {}
     for name, loader in loaders.items():
         print(f"Loading {name} -> ods_{name} via mxgate...")

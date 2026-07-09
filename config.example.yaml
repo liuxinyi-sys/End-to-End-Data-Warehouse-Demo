@@ -1,0 +1,87 @@
+# YMatrix 数仓 Demo 配置示例
+# 复制本文件为 config.yaml 并按需修改
+
+# ====== 数据规模 ======
+# 默认开发规模: 200000 (20万订单)
+# 性能演示规模: 1000000 (100万订单)
+# 压力测试规模: 5000000 (500万订单)
+order_count: 200000
+
+# ====== 业务时区 ======
+# 所有时间戳以 Asia/Shanghai 为业务时区
+# 源数据时间字段保留源名 (orders.order_date, payments.pay_date)
+# DWD 层语义重命名: order_time, pay_time, order_date
+business_timezone: "Asia/Shanghai"
+
+# ====== MySQL 业务库 ======
+mysql:
+  host: "localhost"
+  port: 3306
+  database: "ecommerce"
+  user: "root"
+  password: "root"
+  charset: "utf8mb4"
+  # CSV 加载需要开启 local_infile
+  local_infile: true
+
+# ====== YMatrix 数仓 ======
+ymatrix:
+  host: "localhost"
+  port: 5432
+  database: "dw_demo"
+  user: "mxadmin"
+  password: "mxadmin123"
+  # mxgate 高性能写入
+  mxgate_path: "/opt/ymatrix/matrixdb5/bin/mxgate"
+  psql_path: "/opt/ymatrix/matrixdb5/bin/psql"
+  parallel: 16          # mxgate 并行度
+  delimiter: ","        # mxgate 分隔符
+  time_format: "raw"    # 时间格式
+
+# ====== ETL Pipeline ======
+etl:
+  # 数据源: MySQL
+  source: "mysql"
+  # 加载方式: mxgate (高性能) 或 copy (兼容)
+  loader: "mxgate"
+  # 是否构建压缩对比样本
+  compression_sample: true
+  compression_sample_copies: 40  # 放大倍数，用于 MARS3 vs HEAP 对比
+
+# ====== Grafana ======
+grafana:
+  host: "localhost"
+  port: 3000
+  admin_user: "admin"
+  admin_password: "admin"
+  datasource_uid: "ymatrix-dw-demo"
+
+# ====== 数仓分层配置 ======
+warehouse:
+  # ODS: MARS3 列存引擎，lz4 压缩，按月 RANGE 分区
+  ods_engine: "MARS3"
+  ods_compression: "lz4"
+  ods_compresslevel: 7
+  ods_partition: "monthly"  # monthly | daily
+
+  # DIM: HEAP 行存引擎
+  dim_engine: "HEAP"
+
+  # DWD: MARS3 列存引擎，lz4 压缩，按月 RANGE 分区
+  dwd_engine: "MARS3"
+  dwd_compression: "lz4"
+  dwd_compresslevel: 7
+  dwd_partition: "monthly"
+
+  # DWS: 标准物化视图，批处理 REFRESH
+  dws_type: "MATERIALIZED_VIEW"
+
+  # ADS: 普通视图，零存储
+  ads_type: "VIEW"
+
+# ====== 验证阈值 ======
+verify:
+  min_compression_savings_pct: 50   # MARS3 至少节省 50% 存储
+  min_nov11_multiplier: 50          # 双11订单量至少为日均的 50 倍
+  order_items_ratio_min: 2          # order_items / orders 最小比率
+  order_items_ratio_max: 5          # order_items / orders 最大比率

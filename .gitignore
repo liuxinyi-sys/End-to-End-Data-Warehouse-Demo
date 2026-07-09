@@ -3,6 +3,8 @@
 # 数据目录
 /data/
 *.data/
+sync/seed_*.csv
+sync/__pycache__/
 
 # 环境变量（保留示例文件）
 .env

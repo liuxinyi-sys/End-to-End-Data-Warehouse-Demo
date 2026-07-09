@@ -1,136 +1,345 @@
-"""Generate deterministic seed SQL files for the MySQL business database."""
+"""Generate deterministic seed CSV files for the MySQL business database."""
+import csv
 import os
 import random
+from datetime import datetime, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
-random.seed(42)
+RANDOM_SEED = 42
+DEFAULT_ORDER_COUNT = int(os.environ.get("ORDER_COUNT", "200000"))
+OUTPUT_DIR = os.environ.get("SEED_OUTPUT_DIR", os.path.dirname(os.path.abspath(__file__)))
+BASE_TIME = datetime(2024, 1, 1, 0, 0, 0)
+
+PRODUCT_CATALOG = {
+    "电子": {
+        "brands": ["华为", "小米", "Apple", "OPPO", "vivo"],
+        "types": ["手机", "平板", "笔记本", "耳机", "充电器"],
+        "price": (199, 9999),
+    },
+    "服装": {
+        "brands": ["Nike", "Adidas", "ZARA", "H&M", "优衣库"],
+        "types": ["T恤", "牛仔裤", "外套", "运动鞋", "帽子"],
+        "price": (49, 1299),
+    },
+    "美妆": {
+        "brands": ["雅诗兰黛", "SK-II", "兰蔻", "欧莱雅", "资生堂"],
+        "types": ["精华", "面霜", "眼霜", "面膜", "洗面奶"],
+        "price": (69, 1999),
+    },
+    "食品": {
+        "brands": ["三只松鼠", "良品铺子", "百草味", "来伊份", "洽洽"],
+        "types": ["坚果", "肉干", "果脯", "饼干", "巧克力"],
+        "price": (9.9, 299),
+    },
+    "家居": {
+        "brands": ["宜家", "MUJI", "网易严选", "小米有品", "名创优品"],
+        "types": ["台灯", "收纳盒", "毛巾", "拖鞋", "靠垫"],
+        "price": (19.9, 999),
+    },
+}
+
+PROMOS = {
+    1: {"start": 306, "end": 315, "discount": Decimal("0.10")},
+    2: {"start": 316, "end": 316, "discount": Decimal("0.25")},
+    3: {"start": 317, "end": 319, "discount": Decimal("0.15")},
+}
 
 
-def gen_users(num=1000):
+def money(value):
+    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def write_csv(filename, rows):
+    path = os.path.join(OUTPUT_DIR, filename)
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        for row in rows:
+            writer.writerow(row)
+    return path
+
+
+def format_datetime(value):
+    return value.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+
+def gen_users(num=10000):
     cities = [
-        ("北京", "北京市"), ("上海", "上海市"), ("广州", "广东省"),
-        ("深圳", "广东省"), ("成都", "四川省"), ("武汉", "湖北省"),
-        ("杭州", "浙江省"), ("南京", "江苏省"), ("西安", "陕西省"),
+        ("北京", "北京市"),
+        ("上海", "上海市"),
+        ("广州", "广东省"),
+        ("深圳", "广东省"),
+        ("成都", "四川省"),
+        ("武汉", "湖北省"),
+        ("杭州", "浙江省"),
+        ("南京", "江苏省"),
+        ("西安", "陕西省"),
         ("重庆", "重庆市"),
     ]
-    values = []
+    rows = []
+    weighted_user_ids = []
+    one_time_user_ids = []
+    register_base = datetime(2023, 1, 1)
+
+    # User segmentation: 55% inactive, 25% one-time, 20% repeat
+    inactive_count = int(num * 0.55)
+    one_time_count = int(num * 0.25)
+    # remaining are repeat buyers
+
     for user_id in range(1, num + 1):
         city, province = random.choice(cities)
-        register_day = random.randint(0, 365)
-        values.append(
-            "({},'user_{}','user{}@email.com',DATE_ADD('2023-01-01',INTERVAL {} DAY),'{}','{}','active')".format(
-                user_id, user_id, user_id, register_day, city, province
-            )
+        register_date = (register_base + timedelta(days=random.randint(0, 365))).date()
+        rows.append(
+            [
+                user_id,
+                "user_{}".format(user_id),
+                "user{}@email.com".format(user_id),
+                register_date.isoformat(),
+                city,
+                province,
+                "active",
+            ]
         )
-    with open("seed_users.sql", "w", encoding="utf-8") as output:
-        output.write("INSERT INTO users VALUES\n" + ",\n".join(values) + ";")
-    print("users: {} rows".format(len(values)))
+
+        if user_id <= inactive_count:
+            # Inactive: never places an order
+            pass
+        elif user_id <= inactive_count + one_time_count:
+            # One-time buyer: gets exactly 1 order later
+            one_time_user_ids.append(user_id)
+        else:
+            # Repeat buyer: weight determines order frequency
+            repeat_idx = user_id - inactive_count - one_time_count
+            repeat_total = num - inactive_count - one_time_count
+            if repeat_idx <= int(repeat_total * 0.1):
+                weight = 8  # heavy buyers (top 10%)
+            elif repeat_idx <= int(repeat_total * 0.35):
+                weight = 4  # regular buyers
+            else:
+                weight = 2  # light repeat buyers
+            weighted_user_ids.extend([user_id] * weight)
+
+    write_csv("seed_users.csv", rows)
+    print("users: {} rows ({} inactive, {} one-time, {} repeat)".format(
+        len(rows), inactive_count, one_time_count, num - inactive_count - one_time_count))
+    return weighted_user_ids, one_time_user_ids
 
 
 def gen_products(num=500):
-    categories = {
-        "电子": ["华为", "小米", "Apple", "OPPO", "vivo"],
-        "服装": ["Nike", "Adidas", "优衣库", "ZARA", "H&M"],
-        "美妆": ["雅诗兰黛", "兰蔻", "SK-II", "欧莱雅", "资生堂"],
-        "食品": ["三只松鼠", "良品铺子", "百草味", "来伊份", "恰恰"],
-        "家居": ["宜家", "MUJI", "网易严选", "小米有品", "名创优品"],
-    }
-    product_types = [
-        "手机", "平板", "笔记本", "耳机", "充电器",
-        "T恤", "牛仔裤", "外套", "运动鞋", "帽子",
-        "精华液", "面霜", "眼霜", "面膜", "洗面奶",
-        "坚果礼盒", "肉干", "果脯", "饼干", "巧克力",
-        "台灯", "收纳盒", "毛巾", "拖鞋", "靠垫",
-    ]
-    values = []
+    products = []
+    rows = []
+    categories = list(PRODUCT_CATALOG.keys())
     product_id = 1
-    for category, brands in categories.items():
-        for _ in range(num // len(categories)):
-            brand = random.choice(brands)
-            product_type = random.choice(product_types)
-            price = round(random.uniform(19.9, 9999.0), 2)
-            stock = random.randint(10, 5000)
-            values.append("({},'{} {}','{}',{},{})".format(
-                product_id, brand, product_type, category, price, stock
-            ))
-            product_id += 1
-    with open("seed_products.sql", "w", encoding="utf-8") as output:
-        output.write("INSERT INTO products VALUES\n" + ",\n".join(values) + ";")
-    print("products: {} rows".format(len(values)))
+
+    for index in range(num):
+        category = categories[index % len(categories)]
+        spec = PRODUCT_CATALOG[category]
+        brand = random.choice(spec["brands"])
+        product_type = random.choice(spec["types"])
+        min_price, max_price = spec["price"]
+        price = money(random.uniform(min_price, max_price))
+        stock = random.randint(10, 5000)
+        product_name = "{} {}".format(brand, product_type)
+        product = {
+            "product_id": product_id,
+            "product_name": product_name,
+            "category": category,
+            "price": price,
+            "stock": stock,
+        }
+        products.append(product)
+        rows.append([product_id, product_name, category, str(price), stock])
+        product_id += 1
+
+    write_csv("seed_products.csv", rows)
+    print("products: {} rows".format(len(rows)))
+    return products
 
 
-def gen_orders(num=50000):
-    order_values, item_values, payment_values = [], [], []
+def choose_day():
+    days = list(range(365))
+    weights = []
+    for day in days:
+        day_of_year = day + 1
+        if day_of_year == 316:
+            weight = 100.0
+        elif 306 <= day_of_year <= 315:
+            weight = 5.0
+        elif 317 <= day_of_year <= 319:
+            weight = 10.0
+        else:
+            weight = 1.0
+
+        order_date = BASE_TIME + timedelta(days=day)
+        if order_date.weekday() >= 5:
+            weight *= 1.5
+        weights.append(weight)
+    return random.choices(days, weights=weights, k=1)[0]
+
+
+def choose_order_time(day):
+    day_of_year = day + 1
+    if day_of_year == 316:
+        hours = list(range(24))
+        hour_weights = [
+            18 if hour in (0, 10, 20, 21, 22) else 6 if hour in (1, 9, 11, 19, 23) else 1
+            for hour in hours
+        ]
+        hour = random.choices(hours, weights=hour_weights, k=1)[0]
+    else:
+        hour = random.choices(
+            list(range(24)),
+            weights=[1, 1, 1, 1, 1, 2, 4, 5, 6, 6, 5, 5, 5, 5, 5, 6, 7, 8, 8, 7, 6, 4, 3, 2],
+            k=1,
+        )[0]
+
+    return BASE_TIME + timedelta(
+        days=day,
+        hours=hour,
+        minutes=random.randint(0, 59),
+        seconds=random.randint(0, 59),
+        milliseconds=random.randint(0, 999),
+    )
+
+
+def promo_for_day(day):
+    day_of_year = day + 1
+    for promo_id, promo in PROMOS.items():
+        if promo["start"] <= day_of_year <= promo["end"]:
+            return promo_id, promo["discount"]
+    return None, Decimal("0.00")
+
+
+def write_event(writer, event_id, order_id, from_status, to_status, event_time, operator_type="system"):
+    writer.writerow([event_id, order_id, from_status, to_status, format_datetime(event_time), operator_type])
+
+
+def gen_orders(products, weighted_user_ids, one_time_user_ids, num=DEFAULT_ORDER_COUNT):
+    order_path = os.path.join(OUTPUT_DIR, "seed_orders.csv")
+    item_path = os.path.join(OUTPUT_DIR, "seed_order_items.csv")
+    payment_path = os.path.join(OUTPUT_DIR, "seed_payments.csv")
+    event_path = os.path.join(OUTPUT_DIR, "seed_order_status_events.csv")
+
     item_id = 1
     payment_id = 1
-    for order_id in range(1, num + 1):
-        user_id = random.randint(1, 1000)
-        if random.random() < 0.10:
-            day = 315
-        else:
-            day = random.choice(list(range(315)) + list(range(316, 365)))
-        order_date = "DATE_ADD('2024-01-01',INTERVAL {} DAY)".format(day)
-        day_of_year = day + 1
-        if 306 <= day_of_year <= 315:
-            promo_id, discount = 1, 0.10
-        elif day_of_year == 316:
-            promo_id, discount = 2, 0.25
-        elif 317 <= day_of_year <= 319:
-            promo_id, discount = 3, 0.15
-        else:
-            promo_id, discount = "NULL", 0.0
+    event_id = 1
+    order_count = 0
+    item_count = 0
+    payment_count = 0
+    event_count = 0
+    status_choices = ["completed", "paid", "shipped", "cancelled"]
+    status_weights = [70, 15, 10, 5]
+    payment_methods = ["支付宝", "微信", "银行卡"]
+    payment_weights = [40, 40, 20]
 
-        status_random = random.random()
-        if status_random < 0.70:
-            status = "completed"
-        elif status_random < 0.85:
-            status = "paid"
-        elif status_random < 0.95:
-            status = "shipped"
-        else:
-            status = "cancelled"
+    # Shuffle one-time buyers so their orders are spread across the year
+    random.shuffle(one_time_user_ids)
 
-        total = 0.0
-        for _ in range(4):
-            product_id = random.randint(1, 500)
-            quantity = random.choices([1, 2, 3], weights=[60, 30, 10])[0]
-            unit_price = round(random.uniform(19.9, 9999.0), 2)
-            final_price = round(unit_price * (1 - discount), 2)
-            total += final_price * quantity
-            item_values.append("({},{},{},{},{})".format(
-                item_id, order_id, product_id, quantity, unit_price
-            ))
-            item_id += 1
+    # Plan order-to-user assignment:
+    # First 'len(one_time_user_ids)' orders go to one-time buyers (1 each)
+    # Remaining orders go to repeat buyers via weighted_user_ids
+    one_time_iter = iter(one_time_user_ids)
 
-        total = round(total, 2)
-        order_values.append("({},{},{},'{}',{},{})".format(
-            order_id, user_id, order_date, status, total, promo_id
-        ))
-        method = random.choices(["支付宝", "微信", "银行卡"], weights=[40, 40, 20])[0]
-        pay_date = "DATE_ADD('2024-01-01',INTERVAL {} DAY)".format(day + random.randint(0, 2))
-        payment_values.append("({},{},'{}',{},{},'completed')".format(
-            payment_id, order_id, method, pay_date, total
-        ))
-        payment_id += 1
+    with open(order_path, "w", newline="", encoding="utf-8") as order_handle, open(
+        item_path, "w", newline="", encoding="utf-8"
+    ) as item_handle, open(payment_path, "w", newline="", encoding="utf-8") as payment_handle, open(
+        event_path, "w", newline="", encoding="utf-8"
+    ) as event_handle:
+        order_writer = csv.writer(order_handle, lineterminator="\n")
+        item_writer = csv.writer(item_handle, lineterminator="\n")
+        payment_writer = csv.writer(payment_handle, lineterminator="\n")
+        event_writer = csv.writer(event_handle, lineterminator="\n")
 
-    files = [
-        ("seed_orders.sql", order_values),
-        ("seed_order_items.sql", item_values),
-        ("seed_payments.sql", payment_values),
-    ]
-    for filename, values in files:
-        table = filename.split("_", 1)[1].replace(".sql", "")
-        with open(filename, "w", encoding="utf-8") as output:
-            output.write("INSERT INTO " + table + " VALUES\n" + ",\n".join(values) + ";")
-        print("{}: {} rows".format(filename, len(values)))
+        for order_id in range(1, num + 1):
+            # Assign user: one-time buyers first, then repeat buyers
+            one_time_user = next(one_time_iter, None)
+            if one_time_user is not None:
+                user_id = one_time_user
+            else:
+                user_id = random.choice(weighted_user_ids)
+            day = choose_day()
+            order_time = choose_order_time(day)
+            promo_id, discount_rate = promo_for_day(day)
+            status = random.choices(status_choices, weights=status_weights, k=1)[0]
+            item_total = random.choices([1, 2, 3, 5, 10, 20], weights=[45, 30, 12, 8, 4, 1], k=1)[0]
+            total = Decimal("0.00")
+
+            for _ in range(item_total):
+                product = random.choice(products)
+                quantity = random.choices([1, 2, 3], weights=[60, 30, 10], k=1)[0]
+                unit_price = money(product["price"] * money(random.uniform(0.95, 1.05)))
+                line_amount = money(unit_price * quantity * (Decimal("1.00") - discount_rate))
+                total += line_amount
+                item_writer.writerow([item_id, order_id, product["product_id"], quantity, str(unit_price)])
+                item_id += 1
+                item_count += 1
+
+            order_writer.writerow(
+                [
+                    order_id,
+                    user_id,
+                    format_datetime(order_time),
+                    status,
+                    str(money(total)),
+                    promo_id if promo_id is not None else "",
+                ]
+            )
+            order_count += 1
+
+            write_event(event_writer, event_id, order_id, "", "created", order_time)
+            event_id += 1
+            event_count += 1
+
+            if status == "cancelled":
+                cancelled_time = order_time + timedelta(minutes=random.randint(1, 60))
+                write_event(event_writer, event_id, order_id, "created", "cancelled", cancelled_time)
+                event_id += 1
+                event_count += 1
+                continue
+
+            paid_time = order_time + timedelta(minutes=random.randint(0, 10), milliseconds=random.randint(0, 999))
+            write_event(event_writer, event_id, order_id, "created", "paid", paid_time, "payment")
+            event_id += 1
+            event_count += 1
+
+            payment_writer.writerow(
+                [
+                    payment_id,
+                    order_id,
+                    random.choices(payment_methods, weights=payment_weights, k=1)[0],
+                    format_datetime(paid_time),
+                    str(money(total)),
+                    "completed",
+                ]
+            )
+            payment_id += 1
+            payment_count += 1
+
+            if status in ("shipped", "completed"):
+                shipped_time = paid_time + timedelta(hours=random.randint(12, 48), milliseconds=random.randint(0, 999))
+                write_event(event_writer, event_id, order_id, "paid", "shipped", shipped_time)
+                event_id += 1
+                event_count += 1
+
+                if status == "completed":
+                    completed_time = shipped_time + timedelta(days=random.randint(1, 5), milliseconds=random.randint(0, 999))
+                    write_event(event_writer, event_id, order_id, "shipped", "completed", completed_time)
+                    event_id += 1
+                    event_count += 1
+
+    print("orders: {} rows".format(order_count))
+    print("order_items: {} rows".format(item_count))
+    print("payments: {} rows".format(payment_count))
+    print("order_status_events: {} rows".format(event_count))
 
 
-def write_sql_files():
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    gen_users()
-    gen_products()
-    gen_orders()
-    print("All seed SQL files generated")
+def write_seed_files():
+    random.seed(RANDOM_SEED)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    weighted_user_ids, one_time_user_ids = gen_users()
+    products = gen_products()
+    gen_orders(products, weighted_user_ids, one_time_user_ids, DEFAULT_ORDER_COUNT)
+    print("All seed CSV files generated in {}".format(OUTPUT_DIR))
 
 
 if __name__ == "__main__":
-    write_sql_files()
+    write_seed_files()
