@@ -46,7 +46,7 @@ D:\End-to-End-Data-Warehouse-Demo/
 ├── ymatrix/
 │   ├── Dockerfile               # 基于 matrixdb/centos7_demo 构建 YMatrix 镜像
 │   ├── docker-entrypoint.sh     # 容器入口脚本：初始化 + 启动
-│   ├── matrixdb5_5.2.1+community-1_amd64.deb  # YMatrix RPM 安装包（.deb 备用）
+│   ├── matrixdb5_5.2.1+community-1_amd64.deb  # YMatrix 安装包（构建镜像用，已上传 Docker Hub）
 │   ├── init/                    # 容器入口点 initdb 脚本（按编号顺序执行）
 │   │   ├── 01_init.sql          # 创建 ext, APM, dim_date 生成
 │   │   ├── 02_ods.sql           # ODS 5 表 DDL (MARS3, RANGE分区, lz4)
@@ -137,11 +137,15 @@ docker-compose up -d
 bash init_all.sh
 ```
 
-### 镜像构建
+### 镜像更新（可选）
+
+预构建镜像已上传 Docker Hub (`lxy0315/ymatrix5.2-clean:latest`)，普通使用无需构建。
+如需更新 YMatrix 软件包后重新构建：
 
 ```bash
-# 单独构建 YMatrix 镜像（首次或更新软件包后）
 docker-compose build ymatrix
+docker tag ymatrix5.2-clean:latest <your-dockerhub>/ymatrix5.2-clean:latest
+docker push <your-dockerhub>/ymatrix5.2-clean:latest
 ```
 
 ## 编程规范

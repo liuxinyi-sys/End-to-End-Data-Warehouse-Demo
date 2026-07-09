@@ -11,6 +11,78 @@
 - **物化视图预聚合**：标准 MATERIALIZED VIEW + REFRESH，7 个 DWS 预聚合
 - **五层数仓架构**：ODS → DIM → DWD → DWS → ADS，分层清晰
 
+---
+
+## 目录结构
+
+```
+End-to-End-Data-Warehouse-Demo/
+├── init_all.sh                          # [入口] 一键初始化脚本：等待就绪 → 建表 → ETL → 验证
+├── README.md                            # 项目说明文档（本文件）
+├── AGENTS.md                            # AI 协作开发指南
+├── report.md                            # 项目报告
+├── ai_usage.md                          # AI 使用记录
+├── config.example.yaml                  # 全部可配置参数参考
+├── docker-compose.yml                   # 三容器编排：MySQL + YMatrix + Grafana
+├── ymatrix_dw_demo_skill.md             # YMatrix 数仓使用技能文档
+├── .gitattributes                       
+├── .gitignore
+│
+├── mysql/
+│   └── init.sql                         # 业务库 DDL + 种子数据（容器入口点）
+│
+├── ymatrix/                             # YMatrix 数仓引擎
+│   ├── Dockerfile                       # 镜像构建文件（已预构建为 lxy0315/ymatrix5.2-clean:latest 上传 Docker Hub）
+│   ├── docker-entrypoint.sh             # 容器入口脚本：初始化 + 启动
+│   ├── matrixdb5-5.2.1+community-1.el7.x86_64.rpm   # YMatrix RPM 安装包（构建镜像用，普通用户无需关心）
+│   ├── init/                            # 容器入口点 initdb 脚本（按编号顺序执行）
+│   │   ├── 01_init.sql                  # CREATE EXTENSION matrixts, APM 自动分区, dim_date 生成
+│   │   ├── 02_ods.sql                   # ODS 6 表 DDL（MARS3, TIMESTAMP(3), RANGE 月分区）
+│   │   ├── 03_dim.sql                   # DIM 维度表 DDL（HEAP, 10 城市 region, 3 促销）
+│   │   ├── 03_dwd.sql                   # DWD 3 事实表 DDL（MARS3, order_time, status_event_fact）
+│   │   ├── 04_dws.sql                   # 7 个物化视图（time_bucket 分钟级, 状态漏斗, 履约延迟）
+│   │   ├── 05_ads.sql                   # 12 个 ADS 视图（含 ads_gmv_running_total 累计 GMV）
+│   │   └── 06_fdw.sql                   # mysql_fdw 联邦查询（可选展示）
+│   └── verify/
+│       └── 01_compression.sql           # MARS3 vs HEAP 压缩率对比查询
+│
+├── sync/                                # 数据同步 / ETL 引擎
+│   ├── sync_data.py                     # [入口] 编排全流程：extract → transform → load
+│   ├── gen_data.py                      # 生成 MySQL 种子数据（CSV）
+│   ├── extract.py                       # MySQL → DataFrame 抽取
+│   ├── transform.py                     # pandas 清洗逻辑
+│   ├── load_ods.py                      # mxgate stdin → ODS 高速写入
+│   ├── load_dim.py                      # TRUNCATE + mxgate → DIM 维度表
+│   ├── load_dwd.py                      # SQL INSERT INTO...SELECT → DWD / REFRESH MV
+│   ├── verify.py                        # 21 项自动化断言验证 + etl_log 写入
+│   ├── requirements.txt                 # pandas, PyMySQL, psycopg2-binary, sqlalchemy
+│   └── __pycache__/                     # Python 字节码缓存（gitignored 之外的历史提交）
+│
+├── grafana/                             # Grafana 预置配置
+│   ├── datasources/
+│   │   └── ymatrix.yaml                 # YMatrix (PostgreSQL) 数据源
+│   └── dashboards/
+│       ├── ymatrix_dw_demo.json         # 预置 13 面板 Dashboard
+│       └── provider.yaml               # Dashboard 自动加载配置
+│
+├── docs/                                # 文档
+│   ├── supplementary.md                 # 补充文档：设计决策记录
+│   ├── ecommerce-timeseries-verification-2026-07-09.md  # 时序验证报告
+│   ├── full-flow-repair-verification-2026-07-08.md      # 全链路修复验证
+│   ├── full-flow-test-report-2026-07-08.md              # 全链路测试报告
+│   └── superpowers/
+│       ├── specs/                       # 设计规范文档
+│       │   ├── 2026-07-08-full-flow-repair-design.md
+│       │   └── 2026-07-09-ecommerce-business-timeseries-design.md
+│       └── plans/                       # 实施计划文档
+│           ├── 2026-07-07-ymatrix-dw-demo-implementation.md
+│           ├── 2026-07-08-full-flow-repair.md
+│           └── 2026-07-09-ecommerce-business-timeseries-implementation.md
+│
+└── results/                             # 运行结果
+    ├── run-results-2026-07-09.md        # 全链路运行结果记录
+    └── screenshots/                     # Grafana 仪表盘截图
+```
 
 ---
 
