@@ -1,6 +1,7 @@
-# Python 3.6 兼容版本
-pandas>=1.1.5,<1.2
-numpy>=1.16.5,<1.20
+# Python 3.6+ 兼容版本
+# 代码仅使用 3.6 兼容语法（f-string 等），但实际在 3.8+ 环境运行验证通过
+pandas>=1.1.5
+numpy>=1.16.5
 PyMySQL>=0.9.3
 psycopg2-binary>=2.8.0
 sqlalchemy>=1.3.24

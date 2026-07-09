@@ -11,7 +11,6 @@
 - **物化视图预聚合**：标准 MATERIALIZED VIEW + REFRESH，7 个 DWS 预聚合
 - **五层数仓架构**：ODS → DIM → DWD → DWS → ADS，分层清晰
 
-**评分维度**: 可运行性 / 场景理解 / 工程完整度 / 测试与验证 / AI 使用能力 / 报告与表达
 
 ---
 
@@ -23,7 +22,7 @@
 |------|---------|------|------|
 | **Docker Desktop** | 4.20+ (引擎 24.0+) | 容器编排 MySQL + YMatrix + Grafana | [下载](https://www.docker.com/products/docker-desktop/) |
 | **Git** | 2.30+ | 克隆仓库、运行 init_all.sh | [下载](https://git-scm.com/) |
-| **Python** | 3.8+ | ETL 脚本（extract/transform/load/verify） | [下载](https://www.python.org/) |
+| **Python** | 3.6+ | ETL 脚本（extract/transform/load/verify），代码兼容 3.6 | [下载](https://www.python.org/) |
 
 > **说明**：MySQL 8.0、YMatrix 5.2.1、Grafana 均运行在 Docker 容器中，无需主机单独安装。Python 仅用于运行 ETL 脚本。
 
