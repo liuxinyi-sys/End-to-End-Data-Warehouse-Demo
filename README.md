@@ -93,6 +93,12 @@ Grafana 仪表盘: [http://localhost:3000](http://localhost:3000)
 - 用户复购率（单值 Stat）
 - GMV 按省份分布（柱状图）
 - 双11 累计 GMV（折线图，`ads_gmv_running_total`）
+- 订单状态漏斗（柱状图）
+- 促销期 vs 日常期 GMV（条形仪表）
+- 用户价值分层（环形图）
+- 双11 分钟级流量（折线图）
+- 履约延迟（单值 Stat）
+- 流量峰值 Top 20 分钟（表格）
 
 ## 数据规模
 

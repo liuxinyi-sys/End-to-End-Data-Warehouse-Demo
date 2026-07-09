@@ -30,7 +30,7 @@ Docker Compose
 | DIM | HEAP | 4 张维度表（dim_region 10 城市、dim_promotion 3 促销、dim_product、dim_user） |
 | DWD | MARS3（lz4 level 7，按月 RANGE 分区） | 3 张事实表（order_fact、detail_fact、status_event_fact） |
 | DWS | MATERIALIZED VIEW | 7 个预聚合（含 time_bucket 分钟级流量、状态漏斗、履约延迟） |
-| ADS | VIEW | 11 个业务指标（含 ads_gmv_running_total 双11累计 GMV） |
+| ADS | VIEW | 12 个业务指标（含 ads_gmv_running_total、ads_order_fulfillment_latency） |
 
 ### YMatrix 特性展示
 | # | 特性 | 展示位置 |
@@ -57,7 +57,7 @@ Docker Compose
 - 时间精度: 毫秒级 DATETIME(3)
 - 业务时区: Asia/Shanghai
 
-### 业务指标（11 个 ADS 视图）
+### 业务指标（12 个 ADS 视图）
 | # | 指标 | ADS 视图 | 说明 |
 |---|------|---------|------|
 | 1 | 每日 GMV | ads_daily_gmv | 按天聚合订单量和 GMV |
@@ -65,12 +65,13 @@ Docker Compose
 | 3 | 品类销售占比 | ads_category_sales | 5 大品类收入占比 |
 | 4 | 用户复购率 | ads_user_repurchase | 多次购买用户占比 |
 | 5 | 用户价值分层 | ads_user_segment | 按消费额 NTILE 3 等分 |
-| 6 | GMV 按省份分布 | ads_gmv_by_region | 10 省份 GMV 排名 |
+| 6 | GMV 按省份分布 | ads_gmv_by_region | 9 省份 GMV 排名 |
 | 7 | 促销对比 | ads_promo_compare | 促销期 vs 日常期 GMV 提升 |
 | 8 | 分钟级流量 | ads_minute_traffic | 双11逐分钟订单量和 GMV |
 | 9 | 流量峰值分钟 | ads_traffic_peak_minutes | 订单量 Top 20 分钟 |
 | 10 | 订单状态漏斗 | ads_order_status_funnel | created→paid→shipped→completed |
 | 11 | 双11累计 GMV | ads_gmv_running_total | 窗口函数实现累计求和 |
+| 12 | 履约延迟 | ads_order_fulfillment_latency | 付款→发货→完成平均耗时 |
 
 ### ETL Pipeline 设计
 - 幂等: 每次全量 TRUNCATE + 重载（mxgate 加载前 TRUNCATE）

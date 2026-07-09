@@ -62,7 +62,7 @@ def format_datetime(value):
     return value.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
-def gen_users(num=1000):
+def gen_users(num=10000):
     cities = [
         ("北京", "北京市"),
         ("上海", "上海市"),
@@ -77,7 +77,14 @@ def gen_users(num=1000):
     ]
     rows = []
     weighted_user_ids = []
+    one_time_user_ids = []
     register_base = datetime(2023, 1, 1)
+
+    # User segmentation: 55% inactive, 25% one-time, 20% repeat
+    inactive_count = int(num * 0.55)
+    one_time_count = int(num * 0.25)
+    # remaining are repeat buyers
+
     for user_id in range(1, num + 1):
         city, province = random.choice(cities)
         register_date = (register_base + timedelta(days=random.randint(0, 365))).date()
@@ -92,17 +99,29 @@ def gen_users(num=1000):
                 "active",
             ]
         )
-        if user_id <= 200:
-            weight = 6
-        elif user_id <= 700:
-            weight = 3
+
+        if user_id <= inactive_count:
+            # Inactive: never places an order
+            pass
+        elif user_id <= inactive_count + one_time_count:
+            # One-time buyer: gets exactly 1 order later
+            one_time_user_ids.append(user_id)
         else:
-            weight = 1
-        weighted_user_ids.extend([user_id] * weight)
+            # Repeat buyer: weight determines order frequency
+            repeat_idx = user_id - inactive_count - one_time_count
+            repeat_total = num - inactive_count - one_time_count
+            if repeat_idx <= int(repeat_total * 0.1):
+                weight = 8  # heavy buyers (top 10%)
+            elif repeat_idx <= int(repeat_total * 0.35):
+                weight = 4  # regular buyers
+            else:
+                weight = 2  # light repeat buyers
+            weighted_user_ids.extend([user_id] * weight)
 
     write_csv("seed_users.csv", rows)
-    print("users: {} rows".format(len(rows)))
-    return weighted_user_ids
+    print("users: {} rows ({} inactive, {} one-time, {} repeat)".format(
+        len(rows), inactive_count, one_time_count, num - inactive_count - one_time_count))
+    return weighted_user_ids, one_time_user_ids
 
 
 def gen_products(num=500):
@@ -194,7 +213,7 @@ def write_event(writer, event_id, order_id, from_status, to_status, event_time, 
     writer.writerow([event_id, order_id, from_status, to_status, format_datetime(event_time), operator_type])
 
 
-def gen_orders(products, weighted_user_ids, num=DEFAULT_ORDER_COUNT):
+def gen_orders(products, weighted_user_ids, one_time_user_ids, num=DEFAULT_ORDER_COUNT):
     order_path = os.path.join(OUTPUT_DIR, "seed_orders.csv")
     item_path = os.path.join(OUTPUT_DIR, "seed_order_items.csv")
     payment_path = os.path.join(OUTPUT_DIR, "seed_payments.csv")
@@ -212,6 +231,14 @@ def gen_orders(products, weighted_user_ids, num=DEFAULT_ORDER_COUNT):
     payment_methods = ["支付宝", "微信", "银行卡"]
     payment_weights = [40, 40, 20]
 
+    # Shuffle one-time buyers so their orders are spread across the year
+    random.shuffle(one_time_user_ids)
+
+    # Plan order-to-user assignment:
+    # First 'len(one_time_user_ids)' orders go to one-time buyers (1 each)
+    # Remaining orders go to repeat buyers via weighted_user_ids
+    one_time_iter = iter(one_time_user_ids)
+
     with open(order_path, "w", newline="", encoding="utf-8") as order_handle, open(
         item_path, "w", newline="", encoding="utf-8"
     ) as item_handle, open(payment_path, "w", newline="", encoding="utf-8") as payment_handle, open(
@@ -223,7 +250,12 @@ def gen_orders(products, weighted_user_ids, num=DEFAULT_ORDER_COUNT):
         event_writer = csv.writer(event_handle, lineterminator="\n")
 
         for order_id in range(1, num + 1):
-            user_id = random.choice(weighted_user_ids)
+            # Assign user: one-time buyers first, then repeat buyers
+            one_time_user = next(one_time_iter, None)
+            if one_time_user is not None:
+                user_id = one_time_user
+            else:
+                user_id = random.choice(weighted_user_ids)
             day = choose_day()
             order_time = choose_order_time(day)
             promo_id, discount_rate = promo_for_day(day)
@@ -303,9 +335,9 @@ def gen_orders(products, weighted_user_ids, num=DEFAULT_ORDER_COUNT):
 def write_seed_files():
     random.seed(RANDOM_SEED)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    weighted_user_ids = gen_users()
+    weighted_user_ids, one_time_user_ids = gen_users()
     products = gen_products()
-    gen_orders(products, weighted_user_ids, DEFAULT_ORDER_COUNT)
+    gen_orders(products, weighted_user_ids, one_time_user_ids, DEFAULT_ORDER_COUNT)
     print("All seed CSV files generated in {}".format(OUTPUT_DIR))
 
 
