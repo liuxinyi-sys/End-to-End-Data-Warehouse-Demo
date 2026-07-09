@@ -69,18 +69,20 @@ created -> cancelled
 
 ## 时间字段设计
 
-核心时间字段统一使用 `TIMESTAMP(3)`：
+核心时间字段统一使用 `TIMESTAMP(3)`，但采用分层重命名策略：
 
-1. `orders.order_date` 改为 `orders.order_time TIMESTAMP(3)`。
-2. `payments.pay_date` 改为 `payments.pay_time TIMESTAMP(3)`。
-3. ODS/DWD 同步保留 `order_time`、`pay_time`、`event_time`。
-4. DWD 中派生 `order_date DATE` 作为分区字段，继续支持 RANGE 分区。
+1. MySQL 源库保留 `orders.order_date` 字段名，类型升级为 `DATETIME(3)`。
+2. MySQL 源库保留 `payments.pay_date` 字段名，类型升级为 `DATETIME(3)`。
+3. ODS 保留源字段名，用 `TIMESTAMP(3)` 承接源库时间。
+4. DWD 层显式按业务时区 `Asia/Shanghai` 转换，并重命名为 `order_time`、`pay_time`。
+5. DWD 中派生 `order_date DATE` 作为分区字段，继续支持 RANGE 分区。
 
 这样同时满足：
 
 1. 分区裁剪仍可按日/月执行。
 2. 分钟级、秒级、毫秒级查询可以基于 `TIMESTAMP(3)` 执行。
-3. Grafana 可以展示促销流量峰值曲线。
+3. DWS、ADS 和 Grafana 不受容器会话时区漂移影响。
+4. Grafana 可以展示促销流量峰值曲线。
 
 ## 商品与价格生成设计
 
@@ -145,7 +147,7 @@ random.choices([1, 2, 3, 5, 10, 20], weights=[45, 30, 12, 8, 4, 1])[0]
 
 1. 大多数订单为 1 到 3 件。
 2. 少数订单为 5 件以上。
-3. 总明细规模保持在约 200,000 行，继续支撑压缩和聚合演示。
+3. 默认开发规模为 200,000 单，对应约 600,000 到 800,000 行明细，继续支撑压缩和聚合演示。
 
 ## 订单状态流转设计
 
@@ -179,8 +181,9 @@ cancelled: 下单后 1 到 60 分钟
 
 修改：
 
-1. `ods_orders` 使用 `order_time TIMESTAMP(3)`。
-2. `ods_payments` 使用 `pay_time TIMESTAMP(3)`。
+1. `ods_orders` 保留 `order_date TIMESTAMP(3)`。
+2. `ods_payments` 保留 `pay_date TIMESTAMP(3)`。
+3. 新增 `ods_order_status_events.event_time TIMESTAMP(3)`。
 
 ### DIM
 
@@ -192,6 +195,14 @@ cancelled: 下单后 1 到 60 分钟
 
 1. `order_time TIMESTAMP(3)`：时序分析字段。
 2. `order_date DATE`：分区字段。
+
+DWD 转换必须显式指定业务时区，避免 Docker 容器、数据库会话和 Grafana 使用不同默认时区时产生日期错位。推荐口径：
+
+```sql
+ods_orders.order_date AT TIME ZONE 'Asia/Shanghai' AS order_time,
+DATE(ods_orders.order_date AT TIME ZONE 'Asia/Shanghai') AS order_date,
+ods_payments.pay_date AT TIME ZONE 'Asia/Shanghai' AS pay_time
+```
 
 新增或调整：
 
@@ -293,10 +304,11 @@ status IN ('paid', 'shipped', 'completed')
 9. 区域匹配率 100%。
 10. 取消订单不进入 ADS GMV。
 11. `time_bucket('1 minute', order_time)` 返回非空结果。
-12. 峰值分钟订单数高于普通分钟。
-13. DWD 订单 GMV 与明细成交额可对账。
-14. MARS3 vs HEAP 压缩验证继续通过。
-15. Grafana 数据源和 Dashboard 继续可访问。
+12. DWD `order_time`、`pay_time` 和双 11 当日累计曲线均按 `Asia/Shanghai` 业务时区计算，不因会话时区产生日期偏移。
+13. 峰值分钟订单数高于普通分钟。
+14. DWD 订单 GMV 与明细成交额可对账。
+15. MARS3 vs HEAP 压缩验证继续通过。
+16. Grafana 数据源和 Dashboard 继续可访问。
 
 ## 错误处理
 
@@ -308,26 +320,28 @@ status IN ('paid', 'shipped', 'completed')
 
 ## 兼容性与迁移
 
-1. `orders.order_date` 改为 `order_time` 会影响 ODS、DWD、DWS、ADS、Grafana 查询，需要同步修改。
-2. 为便于分区，DWD 中派生 `order_date`，避免破坏已有 RANGE 分区设计。
-3. `payments.pay_date` 改为 `pay_time`，同步修改 extract、transform、load 和 SQL。
-4. 新增 `order_status_events` 后，MySQL 初始化、生成脚本、抽取、ODS DDL、加载器、DWD/DWS/ADS 均需注册。
-5. README 和报告需要更新指标口径，明确有效订单定义。
+1. `orders.order_date` 和 `payments.pay_date` 在 MySQL 与 ODS 保留字段名，只升级到毫秒级时间类型，降低源库迁移成本。
+2. DWD 中统一重命名为 `order_time`、`pay_time`，并显式使用 `Asia/Shanghai` 作为业务时区。
+3. 为便于分区，DWD 中派生 `order_date`，避免破坏已有 RANGE 分区设计。
+4. DWS、ADS、Grafana 只消费 DWD 的 `order_time`、`pay_time` 和 `order_date`，不直接依赖源库字段名。
+5. 新增 `order_status_events` 后，MySQL 初始化、生成脚本、抽取、ODS DDL、加载器、DWD/DWS/ADS 均需注册。
+6. README 和报告需要更新指标口径，明确有效订单定义、业务时区和开发/性能两档规模。
 
 ## 验收标准
 
 完成后必须满足：
 
-1. `docker-compose up -d && bash init_all.sh` 从空卷完整跑通。
-2. MySQL 业务表和新增状态事件表行数符合预期。
+1. `docker-compose up -d && bash init_all.sh` 从空卷完整跑通，默认生成 200,000 单开发调试数据。
+2. MySQL 业务表和新增状态事件表行数符合配置规模预期。
 3. ODS -> DIM -> DWD -> DWS -> ADS 对象完整。
 4. 商品、价格、区域、订单状态流转通过业务可信度验证。
 5. 双 11 当天订单量至少是平日均值 50 倍。
 6. 分钟级 `time_bucket` 查询返回非空结果，并能识别峰值分钟。
-7. ADS 指标口径正确，取消订单不进入 GMV。
-8. DWD 订单 GMV 与明细成交额可对账。
-9. MARS3 压缩验证继续达到目标。
-10. Grafana Dashboard 展示业务指标和时序峰值分析。
+7. DWD 时间转换显式使用 `Asia/Shanghai`，ADS 日级和分钟级指标不发生跨日偏移。
+8. ADS 指标口径正确，取消订单不进入 GMV。
+9. DWD 订单 GMV 与明细成交额可对账。
+10. MARS3 压缩验证继续达到目标。
+11. Grafana Dashboard 展示业务指标和时序峰值分析。
 
 ## 后续实施建议
 
@@ -347,19 +361,23 @@ status IN ('paid', 'shipped', 'completed')
 
 ### 数据规模目标
 
-订单生成规模从 50,000 单提升为可配置规模：
+订单生成规模从 50,000 单提升为可配置规模，并区分开发调试与客户性能展示：
 
 ```text
-default: 1,000,000 orders
+default/dev: 200,000 orders
+performance_demo: 1,000,000 orders
 stress: 5,000,000 orders
 ```
 
 按每单平均约 3 到 4 个明细计算：
 
 ```text
-default: 约 3,000,000 到 4,000,000 order_items
+default/dev: 约 600,000 到 800,000 order_items
+performance_demo: 约 3,000,000 到 4,000,000 order_items
 stress: 约 15,000,000 order_items
 ```
+
+`default/dev` 是 `init_all.sh` 的默认值，用于日常开发、调试和自动验证，必须在普通本地 Docker 环境中稳定完成。`performance_demo` 用于客户演示 YMatrix 在百万订单级别下的写入和查询能力，不作为每次开发验证的默认门槛。`stress` 仅作为可选压测参数，不进入默认流程。
 
 生成脚本不得再在内存中拼接完整 SQL values。必须改为流式写出 CSV 文件：
 
@@ -394,13 +412,13 @@ stress: 约 15,000,000 order_items
 1. MySQL `orders` 保留字段名 `order_date`，但类型升级为 `DATETIME(3)`。
 2. MySQL `payments.pay_date` 保留字段名，类型升级为 `DATETIME(3)`。
 3. ODS 保留源字段名，使用 `TIMESTAMP(3)` 承接。
-4. DWD 层进行强类型转换和语义重命名：
-   - `ods_orders.order_date::TIMESTAMP(3) AS order_time`
-   - `DATE(ods_orders.order_date) AS order_date`
-   - `ods_payments.pay_date::TIMESTAMP(3) AS pay_time`
+4. DWD 层进行强类型转换、显式时区转换和语义重命名：
+   - `ods_orders.order_date AT TIME ZONE 'Asia/Shanghai' AS order_time`
+   - `DATE(ods_orders.order_date AT TIME ZONE 'Asia/Shanghai') AS order_date`
+   - `ods_payments.pay_date AT TIME ZONE 'Asia/Shanghai' AS pay_time`
 5. DWS/ADS/Grafana 使用 DWD 的 `order_time` 做时序分析，使用 DWD 的 `order_date` 做日级分区和日级指标。
 
-该策略把源库改动控制在类型升级，避免一次性重命名穿透所有层，同时在数仓 DWD 层提供清晰语义字段。
+该策略把源库改动控制在类型升级，避免一次性重命名穿透所有层，同时在数仓 DWD 层提供清晰语义字段。后续实现时如果 YMatrix 5.2 对 `TIMESTAMP`/`TIMESTAMPTZ` 的返回类型需要调整，必须保留“显式 `Asia/Shanghai` 业务时区”这一口径，不允许依赖数据库会话默认时区。
 
 ### 订单金额对账设计
 
@@ -491,4 +509,4 @@ Grafana 应新增或替换一个面板展示该累计曲线，标题建议为“
 5. YMatrix ODS 行数与 MySQL 源表行数一致。
 6. `orders.total_amount` 与明细成交额按订单可对账。
 7. `ads_gmv_running_total` 返回双 11 当日非空累计曲线，且累计 GMV 单调递增。
-8. 默认 1,000,000 订单规模可在本地演示环境完成初始化；5,000,000 订单作为压力配置，不作为默认验收门槛。
+8. 默认 200,000 订单规模可在本地开发环境完成初始化；1,000,000 订单作为客户性能展示配置；5,000,000 订单作为压力配置，不作为默认验收门槛。
