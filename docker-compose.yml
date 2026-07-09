@@ -24,8 +24,7 @@ services:
       - default
 
   ymatrix:
-    image: ymatrix5.2-clean:latest                      # 使用构建好的ymatrix镜像
-    pull_policy: never 
+    image: lxy0315/ymatrix5.2-clean:latest                 # Docker Hub 公开镜像
     hostname: ymatrix-master
     container_name: e2e-ymatrix
     restart: unless-stopped

@@ -40,17 +40,7 @@ pip install pandas numpy PyMySQL psycopg2-binary sqlalchemy
 |------|------|------|
 | CPU | 2 核 | 4 核+ |
 | 内存 | 4 GB | 8 GB+ |
-| 磁盘 | 5 GB | 10 GB+（含 YMatrix RPM 包 364MB + 容器镜像） |
-
-### 2.4 YMatrix 镜像构建
-
-本 Demo 的 YMatrix 镜像需要从 RPM 包构建（首次约 5 分钟，之后缓存）：
-
-```bash
-docker-compose build ymatrix
-```
-
-> YMatrix 安装包已包含在仓库中：`ymatrix/matrixdb5-5.2.1+community-1.el7.x86_64.rpm`（364MB）
+| 磁盘 | 5 GB | 10 GB+（含 Docker 镜像约 1.5GB） |
 
 ---
 
@@ -63,29 +53,21 @@ git clone https://github.com/liuxinyi-star/End-to-End-Data-Warehouse-Demo.git
 cd End-to-End-Data-Warehouse-Demo
 ```
 
-### 3.2 构建 ymatrix5.2-clean:latest 镜像（首次运行）
-
-```bash
-docker-compose build ymatrix
-```
-
-此步骤基于 `ymatrix/Dockerfile`，从 `matrixdb/centos7_demo` 基础镜像安装 YMatrix 5.2.1 社区版 RPM 包。构建完成后镜像名为 `ymatrix5.2-clean:latest`。
-
-> 首次构建约 5 分钟，后续直接使用缓存镜像。
-
-### 3.3 启动三容器
+### 3.2 启动三容器
 
 ```bash
 docker-compose up -d
 ```
 
-Docker Compose 会启动三个容器：
+Docker Compose 会自动从 Docker Hub 拉取三个镜像并启动容器：
 
 | 容器 | 镜像 | 端口 | 健康检查 |
 |------|------|------|---------|
 | e2e-mysql | mysql:8.0 | 3306 | mysqladmin ping |
-| e2e-ymatrix | ymatrix5.2-clean:latest | 5432 | psql SELECT 1 |
+| e2e-ymatrix | lxy0315/ymatrix5.2-clean:latest | 5432 | psql SELECT 1 |
 | e2e-grafana | grafana/grafana:latest | 3000 | /api/health |
+
+> 首次拉取 YMatrix 镜像约 364MB，后续直接使用本地缓存。
 
 等待全部健康（约 30-60 秒）：
 
@@ -95,7 +77,7 @@ docker-compose ps
 
 确认三个容器状态均为 `Up (healthy)`。
 
-### 3.4 一键初始化数仓
+### 3.3 一键初始化数仓
 
 ```bash
 bash init_all.sh
