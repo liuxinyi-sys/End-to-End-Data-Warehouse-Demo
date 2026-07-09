@@ -32,20 +32,38 @@ done
 curl -fsS http://localhost:3000/api/health >/dev/null
 echo "All services are ready."
 
-echo "Step 1: Generating seed data..."
+echo "Step 1: Generating seed data"
+export ORDER_COUNT="${ORDER_COUNT:-200000}"
+export SEED_OUTPUT_DIR="${SEED_OUTPUT_DIR:-$(pwd)/sync}"
 cd sync
 python gen_data.py
 cd ..
 
-echo "Step 2: Resetting and loading MySQL data..."
-docker-compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot -proot -D ecommerce -e "SET FOREIGN_KEY_CHECKS=0; TRUNCATE TABLE payments; TRUNCATE TABLE order_items; TRUNCATE TABLE orders; TRUNCATE TABLE products; TRUNCATE TABLE users; SET FOREIGN_KEY_CHECKS=1;"
-for f in sync/seed_users.sql sync/seed_products.sql sync/seed_orders.sql sync/seed_order_items.sql sync/seed_payments.sql; do
-    echo "  Loading $(basename "$f")..."
-    docker-compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot -proot -D ecommerce < "$f"
-done
+echo "Step 2: Resetting and loading MySQL data"
+docker-compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot -proot -e "SET GLOBAL local_infile=1;"
+docker-compose exec -T mysql mysql --local-infile=1 --default-character-set=utf8mb4 -uroot -proot -D ecommerce -e "SET FOREIGN_KEY_CHECKS=0; TRUNCATE TABLE order_status_events; TRUNCATE TABLE payments; TRUNCATE TABLE order_items; TRUNCATE TABLE orders; TRUNCATE TABLE products; TRUNCATE TABLE users; SET FOREIGN_KEY_CHECKS=1;"
+
+load_csv() {
+    local table_name="$1"
+    local csv_path="$2"
+    echo "  Loading ${table_name} from $(basename "$csv_path")"
+    docker-compose exec -T mysql mysql --local-infile=1 --default-character-set=utf8mb4 -uroot -proot -D ecommerce -e "
+LOAD DATA LOCAL INFILE '/dev/stdin'
+INTO TABLE ${table_name}
+CHARACTER SET utf8mb4
+FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'
+LINES TERMINATED BY '\n';" < "$csv_path"
+}
+
+load_csv users sync/seed_users.csv
+load_csv products sync/seed_products.csv
+load_csv orders sync/seed_orders.csv
+load_csv order_items sync/seed_order_items.csv
+load_csv payments sync/seed_payments.csv
+load_csv order_status_events sync/seed_order_status_events.csv
 
 echo "Step 3: MySQL verification..."
-docker-compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot -proot -D ecommerce -e "SELECT 'users' AS table_name, COUNT(*) AS row_count FROM users UNION ALL SELECT 'products', COUNT(*) FROM products UNION ALL SELECT 'orders', COUNT(*) FROM orders UNION ALL SELECT 'order_items', COUNT(*) FROM order_items UNION ALL SELECT 'payments', COUNT(*) FROM payments;"
+docker-compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot -proot -D ecommerce -e "SELECT 'users' AS table_name, COUNT(*) AS row_count FROM users UNION ALL SELECT 'products', COUNT(*) FROM products UNION ALL SELECT 'orders', COUNT(*) FROM orders UNION ALL SELECT 'order_items', COUNT(*) FROM order_items UNION ALL SELECT 'payments', COUNT(*) FROM payments UNION ALL SELECT 'order_status_events', COUNT(*) FROM order_status_events;"
 
 echo "Step 4: Resetting YMatrix warehouse objects..."
 docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -v ON_ERROR_STOP=1 <<'SQL'
