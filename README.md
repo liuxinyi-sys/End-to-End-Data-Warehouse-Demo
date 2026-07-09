@@ -229,14 +229,56 @@ bash init_all.sh
 ### 5.5 SQL 查询示例
 
 ```bash
-# 查看 YMatrix 所有表
+# 查看 YMatrix 所有表和分区
 docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "\dt"
 
-# 查看双11累计 GMV
-docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT * FROM ads_gmv_running_total ORDER BY bucket_time LIMIT 10;"
-
 # 查看 MySQL 业务库行数
-docker-compose exec -T mysql mysql -uroot -proot -D ecommerce -e "SELECT 'orders', COUNT(*) FROM orders UNION ALL SELECT 'order_status_events', COUNT(*) FROM order_status_events;"
+docker-compose exec -T mysql mysql -uroot -proot -D ecommerce -e "SELECT 'users' AS table_name, COUNT(*) AS row_count FROM users UNION ALL SELECT 'products', COUNT(*) FROM products UNION ALL SELECT 'orders', COUNT(*) FROM orders UNION ALL SELECT 'order_items', COUNT(*) FROM order_items UNION ALL SELECT 'payments', COUNT(*) FROM payments UNION ALL SELECT 'order_status_events', COUNT(*) FROM order_status_events;"
+
+# 查看每日 GMV 趋势
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT dt, order_count, gmv, avg_order_amount FROM ads_daily_gmv ORDER BY dt;"
+
+# 查看双11当天 GMV 对比日常
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT dt, order_count, gmv FROM ads_daily_gmv WHERE dt IN ('2024-11-10','2024-11-11','2024-11-12') ORDER BY dt;"
+
+# 查看双11累计 GMV（逐分钟）
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT bucket_time, minute_gmv, running_gmv, minute_order_count, running_order_count FROM ads_gmv_running_total ORDER BY bucket_time LIMIT 10;"
+
+# 查看商品销售 Top 10
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT product_name, category, total_qty, total_revenue FROM ads_top_products;"
+
+# 查看品类销售占比
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT category, revenue, pct FROM ads_category_sales ORDER BY revenue DESC;"
+
+# 查看 GMV 按省份分布
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT province, order_cnt, gmv FROM ads_gmv_by_region ORDER BY gmv DESC;"
+
+# 查看用户复购率
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT repurchase_rate, repeat_buyers, total_buyers FROM ads_user_repurchase;"
+
+# 查看用户价值分层
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT segment, user_count, total_orders FROM ads_user_segment ORDER BY segment;"
+
+# 查看促销期 vs 日常期对比
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT period, days, order_cnt, gmv, daily_avg_gmv, avg_order_value, uplift_pct FROM ads_promo_compare;"
+
+# 查看订单状态漏斗
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT status, order_count FROM ads_order_status_funnel;"
+
+# 查看双11分钟级流量
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT bucket_time, minute_order_count, minute_gmv FROM ads_minute_traffic WHERE bucket_time >= TIMESTAMP '2024-11-11 00:00:00' AND bucket_time < TIMESTAMP '2024-11-12 00:00:00' ORDER BY bucket_time LIMIT 20;"
+
+# 查看流量峰值 Top 20 分钟
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT bucket_time, minute_order_count, minute_gmv FROM ads_traffic_peak_minutes;"
+
+# 查看履约延迟
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT paid_to_shipped_hours, shipped_to_completed_hours FROM ads_order_fulfillment_latency;"
+
+# 查看 MARS3 vs HEAP 压缩率对比
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT pg_total_relation_size('ods_orders_mars_compare') AS mars3_bytes, pg_total_relation_size('ods_orders_heap') AS heap_bytes, ROUND((1.0 - 1.0 * pg_total_relation_size('ods_orders_mars_compare') / pg_total_relation_size('ods_orders_heap')) * 100, 1) AS savings_pct;"
+
+# 查看 ETL 日志
+docker-compose exec -T ymatrix /opt/ymatrix/matrixdb5/bin/psql -h localhost -U mxadmin -d dw_demo -c "SELECT * FROM etl_log ORDER BY log_id;"
 ```
 
 ---
