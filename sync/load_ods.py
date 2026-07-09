@@ -74,8 +74,13 @@ def load_ods_payments(df):
     rows["sync_time"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     _gate("ods_payments", rows); return len(rows)
 
+def load_ods_order_status_events(df):
+    rows = df[["event_id","order_id","from_status","to_status","event_time","operator_type"]].copy()
+    rows["sync_time"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+    _gate("ods_order_status_events", rows); return len(rows)
+
 def load_all(dfs):
-    loaders = {"users":load_ods_users,"products":load_ods_products,"orders":load_ods_orders,"order_items":load_ods_order_items,"payments":load_ods_payments}
+    loaders = {"users":load_ods_users,"products":load_ods_products,"orders":load_ods_orders,"order_items":load_ods_order_items,"payments":load_ods_payments,"order_status_events":load_ods_order_status_events}
     result = {}
     for name, loader in loaders.items():
         print(f"Loading {name} -> ods_{name} via mxgate...")
