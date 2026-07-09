@@ -1,11 +1,9 @@
 CREATE EXTENSION IF NOT EXISTS matrixts;
-CREATE EXTENSION IF NOT EXISTS postgres_fdw;
-SELECT apm_enable_partition_maintenance();
 
 CREATE TABLE dim_date (
     date_key DATE, year SMALLINT, quarter SMALLINT, month SMALLINT,
     week SMALLINT, day_of_month SMALLINT, day_of_week SMALLINT,
-    is_weekend BOOLEAN, season VARCHAR(4)
+    is_weekend BOOLEAN, season VARCHAR(10)
 ) USING HEAP DISTRIBUTED BY (date_key);
 
 INSERT INTO dim_date (date_key, year, quarter, month, week, day_of_month, day_of_week, is_weekend, season)

@@ -42,9 +42,10 @@ services:
       - "5432:5432"
       - "8090:8090"                         # 保留，若未来有 Web UI
     volumes:
-      - ./ymatrix/docker-entrypoint.sh:/docker-entrypoint.sh   # 挂载启动脚本
+      - ./ymatrix/docker-entrypoint.sh:/docker-entrypoint.sh:ro
+      - ./ymatrix/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "PGPASSWORD=mxadmin123 /opt/ymatrix/matrixdb5/bin/pg_isready -h localhost -p 5432 -U mxadmin || exit 1"]
+      test: ["CMD-SHELL", "PGPASSWORD=mxadmin123 /opt/ymatrix/matrixdb5/bin/psql -h localhost -p 5432 -U mxadmin -d dw_demo -tAc 'SELECT 1' | grep -qx 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -58,7 +59,6 @@ services:
     container_name: e2e-grafana
     restart: unless-stopped
     environment:
-      GF_INSTALL_PLUGINS: grafana-postgresql-datasource
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
     ports:

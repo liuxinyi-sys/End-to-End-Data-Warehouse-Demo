@@ -1,18 +1,124 @@
-{"title":"YMatrix DW Demo","timezone":"Asia/Shanghai","panels":[
-{"id":1,"title":"每日 GMV 趋势","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},
- "targets":[{"rawSql":"SELECT dt AS time, gmv, order_count FROM ads_daily_gmv ORDER BY dt","format":"time_series","datasource":"YMatrix"}],
- "fieldConfig":{"defaults":{"unit":"currencyCNY","custom":{"lineInterpolation":"smooth"}}}},
-{"id":2,"title":"商品销售 Top 10","type":"table","gridPos":{"h":8,"w":6,"x":12,"y":0},
- "targets":[{"rawSql":"SELECT product_name,category,total_qty,total_revenue FROM ads_top_products","format":"table","datasource":"YMatrix"}]},
-{"id":3,"title":"品类销售占比","type":"piechart","gridPos":{"h":8,"w":6,"x":18,"y":0},
- "targets":[{"rawSql":"SELECT category,revenue,pct FROM ads_category_sales ORDER BY revenue DESC","format":"table","datasource":"YMatrix"}],
- "options":{"pieType":"pie","displayLabels":["percent","name"]}},
-{"id":4,"title":"用户复购率","type":"stat","gridPos":{"h":6,"w":6,"x":0,"y":8},
- "targets":[{"rawSql":"SELECT repurchase_rate FROM ads_user_repurchase","format":"table","datasource":"YMatrix"}],
- "fieldConfig":{"defaults":{"unit":"percent","color":{"mode":"thresholds"},"thresholds":{"steps":[{"value":0,"color":"red"},{"value":30,"color":"yellow"},{"value":50,"color":"green"}]}}}},
-{"id":5,"title":"GMV 按省份分布","type":"treemap","gridPos":{"h":6,"w":6,"x":6,"y":8},
- "targets":[{"rawSql":"SELECT province,order_cnt,gmv FROM ads_gmv_by_region ORDER BY gmv DESC","format":"table","datasource":"YMatrix"}]},
-{"id":6,"title":"促销 vs 日常","type":"bargauge","gridPos":{"h":6,"w":12,"x":12,"y":8},
- "targets":[{"rawSql":"SELECT period,order_cnt,gmv,avg_order_value FROM ads_promo_compare","format":"table","datasource":"YMatrix"}],
- "options":{"orientation":"horizontal","showUnfilled":true}}
-],"refresh":"5s"}
+{
+  "title": "YMatrix 数仓端到端 Demo",
+  "timezone": "Asia/Shanghai",
+  "panels": [
+    {
+      "id": 1,
+      "title": "每日 GMV 趋势",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT dt AS time, gmv FROM ads_daily_gmv ORDER BY dt", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "fieldConfig": {"defaults": {"unit": "currencyCNY", "custom": {"lineInterpolation": "smooth"}}}
+    },
+    {
+      "id": 2,
+      "title": "商品销售 Top 10",
+      "type": "table",
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT product_name, category, total_qty, total_revenue FROM ads_top_products", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}]
+    },
+    {
+      "id": 3,
+      "title": "品类销售占比",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT category AS metric, revenue AS value FROM ads_category_sales ORDER BY revenue DESC", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "options": {"pieType": "pie", "displayLabels": ["percent", "name"], "labels": {"name": "metric"}}
+    },
+    {
+      "id": 4,
+      "title": "用户复购率",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 4, "x": 0, "y": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT repurchase_rate FROM ads_user_repurchase", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "fieldConfig": {"defaults": {"unit": "percent", "color": {"mode": "thresholds"}, "thresholds": {"steps": [{"value": 0, "color": "red"}, {"value": 30, "color": "yellow"}, {"value": 50, "color": "green"}]}}}
+    },
+    {
+      "id": 5,
+      "title": "GMV 按省份分布",
+      "type": "barchart",
+      "gridPos": {"h": 5, "w": 8, "x": 4, "y": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT province, gmv FROM ads_gmv_by_region ORDER BY gmv DESC", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}]
+    },
+    {
+      "id": 6,
+      "title": "双11 累计 GMV",
+      "type": "timeseries",
+      "gridPos": {"h": 5, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT bucket_time AS time, running_gmv, minute_gmv FROM ads_gmv_running_total ORDER BY bucket_time", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "fieldConfig": {"defaults": {"unit": "currencyCNY", "custom": {"lineInterpolation": "smooth"}}}
+    },
+    {
+      "id": 7,
+      "title": "双11 累计订单量",
+      "type": "timeseries",
+      "gridPos": {"h": 5, "w": 12, "x": 0, "y": 13},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT bucket_time AS time, running_order_count, minute_order_count FROM ads_gmv_running_total ORDER BY bucket_time", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineInterpolation": "smooth"}}}
+    },
+    {
+      "id": 8,
+      "title": "订单状态漏斗",
+      "type": "barchart",
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 13},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT status, order_count FROM ads_order_status_funnel", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "options": {"orientation": "horizontal", "xField": "status"}
+    },
+    {
+      "id": 9,
+      "title": "促销期 vs 日常期",
+      "type": "bargauge",
+      "gridPos": {"h": 5, "w": 3, "x": 18, "y": 13},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT period, daily_avg_gmv FROM ads_promo_compare", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "options": {"orientation": "vertical", "showUnfilled": true},
+      "fieldConfig": {"defaults": {"unit": "currencyCNY"}}
+    },
+    {
+      "id": 10,
+      "title": "用户价值分层",
+      "type": "piechart",
+      "gridPos": {"h": 5, "w": 3, "x": 21, "y": 13},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT segment AS metric, user_count AS value FROM ads_user_segment ORDER BY segment", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "options": {"pieType": "donut", "displayLabels": ["percent", "name"], "labels": {"name": "metric"}}
+    },
+    {
+      "id": 11,
+      "title": "双11 分钟级流量",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 18},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT bucket_time AS time, minute_order_count FROM ads_minute_traffic WHERE bucket_time >= TIMESTAMP '2024-11-11 00:00:00' AND bucket_time < TIMESTAMP '2024-11-12 00:00:00' ORDER BY bucket_time", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineInterpolation": "smooth"}}}
+    },
+    {
+      "id": 12,
+      "title": "履约延迟 (小时)",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 4, "x": 12, "y": 18},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT ROUND(paid_to_shipped_hours, 1) AS \"付款到发货\", ROUND(shipped_to_completed_hours, 1) AS \"发货到完成\" FROM ads_order_fulfillment_latency", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "fieldConfig": {"defaults": {"unit": "h", "color": {"mode": "thresholds"}, "thresholds": {"steps": [{"value": 0, "color": "green"}, {"value": 48, "color": "yellow"}, {"value": 96, "color": "red"}]}}}
+    },
+    {
+      "id": 13,
+      "title": "流量峰值 Top 20 分钟",
+      "type": "table",
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 18},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT bucket_time, minute_order_count, minute_gmv FROM ads_traffic_peak_minutes", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}]
+    }
+  ],
+  "uid": "ymatrix-warehouse-demo",
+  "time": {"from": "2024-01-01T00:00:00.000Z", "to": "2024-12-31T23:59:59.999Z"},
+  "refresh": "5s"
+}

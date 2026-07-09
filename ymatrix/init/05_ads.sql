@@ -10,13 +10,59 @@ CREATE VIEW ads_user_repurchase AS
 SELECT COUNT(*)FILTER(WHERE total_orders>1)*100.0/COUNT(*)repurchase_rate,
   COUNT(*)FILTER(WHERE total_orders>1)repeat_buyers,COUNT(*)total_buyers FROM dws_user_purchase_stats;
 CREATE VIEW ads_user_segment AS
-SELECT CASE WHEN total_orders>=10 OR total_spent>=5000 THEN 'high'
-  WHEN total_orders>=3 OR total_spent>=1000 THEN 'mid' ELSE 'low' END segment,
-  COUNT(*)user_count,SUM(total_orders)total_orders FROM dws_user_purchase_stats GROUP BY 1 ORDER BY 1;
+WITH ranked AS (
+  SELECT user_id,total_orders,total_spent,NTILE(3) OVER(ORDER BY total_spent)spend_tier
+  FROM dws_user_purchase_stats
+)
+SELECT CASE spend_tier WHEN 1 THEN 'low' WHEN 2 THEN 'mid' ELSE 'high' END segment,
+  COUNT(*)user_count,SUM(total_orders)total_orders FROM ranked GROUP BY 1 ORDER BY 1;
 CREATE VIEW ads_gmv_by_region AS
 SELECT r.province,COUNT(DISTINCT f.order_id)order_cnt,SUM(f.total_amount)gmv
   FROM dwd_order_fact f JOIN dim_region r ON f.region_id=r.region_id GROUP BY r.province ORDER BY gmv DESC;
+CREATE VIEW ads_minute_traffic AS
+SELECT bucket_time, minute_order_count, minute_gmv, avg_order_amount
+FROM dws_minute_order_traffic
+ORDER BY bucket_time;
+CREATE VIEW ads_traffic_peak_minutes AS
+SELECT bucket_time, minute_order_count, minute_gmv
+FROM dws_minute_order_traffic
+ORDER BY minute_order_count DESC, minute_gmv DESC
+LIMIT 20;
+CREATE VIEW ads_order_status_funnel AS
+SELECT status, order_count
+FROM dws_order_status_funnel
+ORDER BY CASE status
+  WHEN 'created' THEN 1
+  WHEN 'paid' THEN 2
+  WHEN 'shipped' THEN 3
+  WHEN 'completed' THEN 4
+  WHEN 'cancelled' THEN 5
+  ELSE 9
+END;
+CREATE VIEW ads_order_fulfillment_latency AS
+SELECT paid_to_shipped_hours, shipped_to_completed_hours
+FROM dws_order_fulfillment_latency;
+CREATE VIEW ads_gmv_running_total AS
+SELECT
+  bucket_time,
+  minute_gmv,
+  SUM(minute_gmv) OVER (ORDER BY bucket_time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_gmv,
+  minute_order_count,
+  SUM(minute_order_count) OVER (ORDER BY bucket_time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_order_count
+FROM dws_minute_order_traffic
+WHERE bucket_time >= TIMESTAMP '2024-11-11 00:00:00'
+  AND bucket_time <  TIMESTAMP '2024-11-12 00:00:00';
 CREATE VIEW ads_promo_compare AS
-SELECT CASE WHEN o.promo_id IS NOT NULL THEN '大促期' ELSE '日常期' END period,
-  COUNT(DISTINCT o.order_id)order_cnt,SUM(o.total_amount)gmv,
-  SUM(o.total_amount)/COUNT(DISTINCT o.order_id)avg_order_value FROM dwd_order_fact o GROUP BY 1;
+SELECT
+  period,
+  days,
+  order_cnt,
+  gmv,
+  daily_avg_gmv,
+  avg_order_value,
+  CASE
+    WHEN period = 'promo' THEN
+      (daily_avg_gmv / NULLIF((SELECT daily_avg_gmv FROM dws_promo_daily_compare WHERE period='normal'), 0) - 1) * 100
+    ELSE 0
+  END AS uplift_pct
+FROM dws_promo_daily_compare;

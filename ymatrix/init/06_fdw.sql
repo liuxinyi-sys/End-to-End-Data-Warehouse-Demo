@@ -1,6 +1,9 @@
--- mysql_fdw (optional, requires mysql_fdw extension in YMatrix image)
--- CREATE EXTENSION IF NOT EXISTS mysql_fdw;
--- CREATE SERVER mysql_ecommerce FOREIGN DATA WRAPPER mysql_fdw
---     OPTIONS (host 'mysql', port '3306', dbname 'ecommerce');
--- CREATE USER MAPPING FOR mxadmin SERVER mysql_ecommerce
---     OPTIONS (username 'root', password 'root');
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'mysql_fdw') THEN
+        RAISE NOTICE 'mysql_fdw is available; optional cross-database setup can be enabled separately';
+    ELSE
+        RAISE NOTICE 'mysql_fdw is unavailable in this image; skipping optional FDW showcase';
+    END IF;
+END
+$$;

@@ -1,6 +1,7 @@
 apiVersion: 1
 datasources:
   - name: YMatrix
+    uid: ymatrix-dw-demo
     type: postgres
     access: proxy
     url: ymatrix:5432
@@ -8,8 +9,9 @@ datasources:
     database: dw_demo
     isDefault: true
     jsonData:
+      database: dw_demo
       sslmode: disable
       postgresVersion: 1500
       timescaledb: false
     secureJsonData:
-      password: ""
+      password: mxadmin123

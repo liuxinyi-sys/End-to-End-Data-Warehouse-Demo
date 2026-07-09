@@ -11,7 +11,9 @@ from verify import verify_ads
 
 def log(step, status, rows=0, ms=0, msg=""):
     sql = f"INSERT INTO etl_log(step,status,rows_processed,duration_ms,message) VALUES('{step}','{status}',{rows},{ms},'{msg}');"
-    subprocess.run(["psql","-h","localhost","-p","5432","-U","mxadmin","-d","dw_demo","-c",sql],capture_output=True,text=True)
+    subprocess.run(["docker-compose","exec","-T","ymatrix","/opt/ymatrix/matrixdb5/bin/psql",
+        "-h","localhost","-p","5432","-U","mxadmin","-d","dw_demo","-v","ON_ERROR_STOP=1","-c",sql],
+        capture_output=True,text=True,check=True)
 
 def main():
     t_start = time.time()

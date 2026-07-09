@@ -1,9 +1,10 @@
 -- ============================================================
 -- MySQL 业务库初始化脚本
 -- 在容器首次启动时由 /docker-entrypoint-initdb.d/init.sql 自动执行
--- 创建 8 张表 (5 张业务表 + 3 张维度表) 并插入种子数据
+-- 创建 9 张表 (6 张业务表 + 3 张维度表) 并插入种子数据
 -- ============================================================
 
+DROP TABLE IF EXISTS order_status_events;
 DROP TABLE IF EXISTS payments;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
@@ -40,7 +41,7 @@ CREATE TABLE products (
 CREATE TABLE orders (
     order_id      INT             NOT NULL AUTO_INCREMENT,
     user_id       INT             NOT NULL,
-    order_date    DATE            NOT NULL,
+    order_date    DATETIME(3)     NOT NULL,
     status        VARCHAR(20)     NOT NULL DEFAULT 'pending',
     total_amount  DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
     promo_id      INT             DEFAULT NULL,
@@ -64,12 +65,24 @@ CREATE TABLE payments (
     payment_id    INT             NOT NULL AUTO_INCREMENT,
     order_id      INT             NOT NULL,
     method        VARCHAR(30)     NOT NULL,
-    pay_date      DATE            NOT NULL,
+    pay_date      DATETIME(3)     NOT NULL,
     amount        DECIMAL(10,2)   NOT NULL,
     status        VARCHAR(20)     NOT NULL DEFAULT 'completed',
     PRIMARY KEY (payment_id),
     KEY idx_order_id (order_id),
     KEY idx_pay_date (pay_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE order_status_events (
+    event_id      BIGINT          NOT NULL AUTO_INCREMENT,
+    order_id      INT             NOT NULL,
+    from_status   VARCHAR(20)     DEFAULT NULL,
+    to_status     VARCHAR(20)     NOT NULL,
+    event_time    DATETIME(3)     NOT NULL,
+    operator_type VARCHAR(20)     NOT NULL DEFAULT 'system',
+    PRIMARY KEY (event_id),
+    KEY idx_order_id (order_id),
+    KEY idx_event_time (event_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
@@ -113,11 +126,16 @@ CREATE TABLE dim_promotion (
 -- ============================================================
 
 INSERT INTO dim_region (province, city, district, region_tier) VALUES
-    ('北京市',   '北京',   '朝阳区', '一线'),
-    ('上海市',   '上海',   '浦东新区', '一线'),
-    ('广东省',   '广州',   '天河区', '一线'),
-    ('广东省',   '深圳',   '南山区', '一线'),
-    ('四川省',   '成都',   '高新区', '新一线');
+    ('北京市',   '北京',   '朝阳区',   'T1'),
+    ('上海市',   '上海',   '浦东新区', 'T1'),
+    ('广东省',   '广州',   '天河区',   'T1'),
+    ('广东省',   '深圳',   '南山区',   'T1'),
+    ('四川省',   '成都',   '高新区',   'T2'),
+    ('湖北省',   '武汉',   '洪山区',   'T2'),
+    ('浙江省',   '杭州',   '西湖区',   'T2'),
+    ('江苏省',   '南京',   '鼓楼区',   'T2'),
+    ('陕西省',   '西安',   '雁塔区',   'T2'),
+    ('重庆市',   '重庆',   '渝中区',   'T2');
 
 -- dim_promotion: 3 条促销数据
 INSERT INTO dim_promotion (promo_name, promo_type, start_date, end_date, discount_rate) VALUES
