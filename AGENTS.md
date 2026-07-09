@@ -12,7 +12,10 @@
 - **Docker Compose 编排**: 三容器（MySQL + YMatrix + Grafana），零主机环境依赖
 - **分层清晰**: ODS → DIM → DWD → DWS → ADS 五层明确分离（含维度层）
 - **YMatrix 特性展示**: MARS3/HEAP 双引擎、mxgate 高速写入、物化视图预聚合、RANGE 分区
-- **指标可见**: 所有 7 个 ADS 指标在 YMatrix 中可直接查询，Grafana 零代码展示
+- **指标可见**: 所有 11 个 ADS 指标在 YMatrix 中可直接查询，Grafana 零代码展示
+- **时序能力**: time_bucket 分钟级流量、双11累计 GMV、状态漏斗、履约延迟
+- **时区规则**: 业务时区 Asia/Shanghai，DWD 层显式 `AT TIME ZONE 'Asia/Shanghai'` 转换
+- **可配置规模**: 默认 ORDER_COUNT=200000，性能演示 ORDER_COUNT=1000000
 
 ### 技术栈
 
@@ -223,9 +226,9 @@ git push origin HEAD
 
 1. `docker-compose up -d` 三容器启动成功（MySQL + YMatrix + Grafana）
 2. `bash init_all.sh` 能从头跑到底且输出正确
-3. MySQL 5 表行数符合预期（users 1000, products 500, orders 50000, order_items 200000, payments 50000）
-4. YMatrix 四层对象完整（ODS 5 + DIM 5 + DWD 2 + DWS 3 + ADS 7）
-5. ADS 层 7 个指标数据在合理范围内（各查询返回非空结果）
+3. MySQL 6 表行数符合预期（users 1000, products 500, orders 200000 默认, order_items 600K~1M, payments ~190K, order_status_events ~560K+）
+4. YMatrix 四层对象完整（ODS 6 + DIM 4 + DWD 3 + DWS 7 + ADS 11）
+5. ADS 层 11 个指标数据在合理范围内（各查询返回非空结果，含 ads_gmv_running_total 累计 GMV 单调递增）
 6. Grafana http://localhost:3000 正常访问，6 个面板图表正确渲染
 7. MARS3 相比 HEAP 至少节省 50% 存储空间
 8. etl_log 记录全链路分步耗时

@@ -54,12 +54,12 @@ bash init_all.sh       # 一键初始化: init SQL -> 生成数据 -> ETL -> 验
 ```
 ymatrix/init/
 ├── 01_init.sql        # CREATE EXTENSION matrixts, APM, dim_date 生成
-├── 02_ods.sql         # ODS 5 表 DDL
-├── 03_dim.sql         # DIM 5 表 DDL
-├── 04_dwd.sql         # DWD 2 事实表 DDL
-├── 05_dws.sql         # 物化视图 DDL
-├── 06_ads.sql         # ADS 视图 DDL
-└── 07_fdw.sql         # mysql_fdw（可选）
+├── 02_ods.sql         # ODS 6 表 DDL（含 order_status_events，TIMESTAMP(3)）
+├── 03_dim.sql         # DIM 维度表 DDL（10 城市 region）
+├── 03_dwd.sql         # DWD 3 事实表 DDL（含 status_event_fact，时区字段）
+├── 04_dws.sql         # 7 个物化视图 DDL（含 time_bucket 分钟级）
+├── 05_ads.sql         # ADS 视图 DDL（含 ads_gmv_running_total）
+└── 06_fdw.sql         # mysql_fdw（可选）
 ```
 
 ## 运行方式
@@ -91,13 +91,26 @@ Grafana 仪表盘: [http://localhost:3000](http://localhost:3000)
 - 商品销售 Top 10（表格）
 - 品类销售占比（饼图）
 - 用户复购率（单值 Stat）
-- GMV 按省份分布（Treemap）
-- 促销 vs 日常对比（柱状图）
-- 用户价值分层（饼图）
+- GMV 按省份分布（柱状图）
+- 双11 累计 GMV（折线图，`ads_gmv_running_total`）
+
+## 数据规模
+
+| 规模 | 环境变量 | 订单数 | 用途 |
+|------|---------|--------|------|
+| 默认开发规模 | `ORDER_COUNT=200000` | 200,000 | 默认全链路验证 |
+| 性能演示规模 | `ORDER_COUNT=1000000` | 1,000,000 | 性能压测演示 |
+| 压力测试规模 | `ORDER_COUNT=5000000` | 5,000,000 | 极限压力测试 |
+
+## 业务时区
+
+- 业务时区: `Asia/Shanghai`
+- 源时间字段: `orders.order_date` 和 `payments.pay_date` 保留源名，升级为毫秒级时间戳 (`DATETIME(3)`)
+- DWD 语义字段: `order_time`、`pay_time`、`order_date`，在 DWD 层通过 `AT TIME ZONE 'Asia/Shanghai'` 显式转换
 
 ## 已知限制
 
 - **单节点部署**: 仅演示单台 Docker 容器，不涉及 MPP 集群扩展
 - **批量 ETL 模式**: 使用标准物化视图 + REFRESH，非实时流式处理
-- **模拟数据**: 50K 订单 / 200K 明细，非真实业务数据
+- **模拟数据**: 默认 200K 订单，非真实业务数据
 - **无 HA/容错**: 未配置 Mirror / 数据备份

@@ -1,5 +1,7 @@
 """Verify ADS metrics and compression ratio."""
-import subprocess, sys
+import subprocess, sys, os
+
+EXPECTED_ORDERS = int(os.environ.get("ORDER_COUNT", "200000"))
 
 def _sql(cmd):
     r = subprocess.run(["docker-compose","exec","-T","ymatrix","/opt/ymatrix/matrixdb5/bin/psql",
@@ -52,7 +54,22 @@ def verify_ads():
     lc = int(_sql("SELECT COUNT(*) FROM etl_log;"))
     r = lc >= 7; results["etl_log: >= 7 entries"] = r; print(f"  etl_log: {lc} entries -> {'PASS' if r else 'FAIL'}")
     orders = _int("SELECT COUNT(*) FROM ods_orders;")
-    _pass(results, "ods_orders >= 200000", orders >= 200000, "{} rows".format(orders))
+    _pass(results, "ods_orders equals configured scale", orders == EXPECTED_ORDERS, "{} rows".format(orders))
+
+    items = _int("SELECT COUNT(*) FROM ods_order_items;")
+    _pass(results, "order_items 3x to 5x orders", EXPECTED_ORDERS * 3 <= items <= EXPECTED_ORDERS * 5, "{} rows".format(items))
+
+    nov11 = _int("SELECT COUNT(*) FROM dwd_order_fact WHERE order_date = DATE '2024-11-11';")
+    normal_avg = _float("""
+        SELECT AVG(order_count)
+        FROM (
+          SELECT order_date, COUNT(*) AS order_count
+          FROM dwd_order_fact
+          WHERE order_date <> DATE '2024-11-11'
+          GROUP BY order_date
+        ) s;
+    """)
+    _pass(results, "Nov 11 >= 50x normal daily average", normal_avg > 0 and nov11 >= normal_avg * 50, "{} vs {:.2f}".format(nov11, normal_avg))
 
     status_events = _int("SELECT COUNT(*) FROM ods_order_status_events;")
     _pass(results, "status events present", status_events >= orders, "{} rows".format(status_events))

@@ -24,11 +24,11 @@ Docker Compose
 ### 数仓分层
 | 层级 | 存储引擎 | 内容 |
 |------|---------|------|
-| ODS | MARS3（lz4 level 7，按天分区） | 5 张原始表镜像 |
-| DIM | HEAP | 5 张维度表 |
-| DWD | MARS3（lz4 level 7，按天分区） | 2 张明细事实表 |
-| DWS | MATERIALIZED VIEW | 3 个预聚合 |
-| ADS | VIEW | 7 个业务指标 |
+| ODS | MARS3（lz4 level 7，按月分区） | 6 张原始表镜像（含 order_status_events，TIMESTAMP(3)） |
+| DIM | HEAP | 维度表（含 10 城市 region） |
+| DWD | MARS3（lz4 level 7，按月分区） | 3 张事实表（含 status_event_fact，显式 Asia/Shanghai 时区转换） |
+| DWS | MATERIALIZED VIEW | 7 个预聚合（含 time_bucket 分钟级流量） |
+| ADS | VIEW | 11 个业务指标（含 ads_gmv_running_total） |
 
 ### YMatrix 特性展示
 | # | 特性 | 展示位置 |
@@ -48,10 +48,12 @@ Docker Compose
 ## 2. 实现说明
 
 ### 业务数据库（MySQL 电商场景）
-- users (1,000), products (500), orders (50,000), order_items (200,000), payments (50,000)
-- 双11促销波峰（11.11 达日常 6x）
+- users (1,000), products (500), orders (默认 200,000), order_items (600K~1M), payments (190K), order_status_events (560K+)
+- 双11促销波峰（11.11 达日常 50x+）
 - 时间范围: 2024-01-01 ~ 2024-12-31
-- 城市覆盖: 北京/上海/广州/成都/武汉
+- 城市覆盖: 北京/上海/广州/深圳/成都/武汉/杭州/南京/西安/重庆
+- 时间精度: 毫秒级 (DATETIME(3))
+- 业务时区: Asia/Shanghai
 
 ### ETL Pipeline 设计
 - 幂等: 每次全量 TRUNCATE + 重载
@@ -80,13 +82,16 @@ Docker Compose
 | 检查项 | 预期 |
 |--------|------|
 | MySQL: users | 1000 行 |
-| MySQL: orders | 50000 行 |
-| MySQL: order_items | 200000 行 |
+| MySQL: orders | 200000 行（默认 ORDER_COUNT） |
+| MySQL: order_items | 600000~1000000 行 |
+| MySQL: order_status_events | ≥ 200000 行 |
 | ODS 行数 = MySQL 行数 | 严格相等 |
 | ads_daily_gmv | 365 行，可见双11波峰 |
-| ads_top_products | 10 行，revenue > 0 |
-| ads_category_sales | 5 行，占比之和 ≈ 100% |
-| ads_user_repurchase | 复购率 ≈ 30% |
+| ads_gmv_running_total | 非空，累计 GMV 单调递增 |
+| ads_minute_traffic | 非空 |
+| DWD 时区对齐 | order_date = DATE(order_time) |
+| 订单/明细金额对账 | 误差 < 0.05 |
+| Nov 11 流量 | ≥ 50x 日均 |
 | MARS3 vs HEAP 压缩率 | MARS3 节省 50%+ |
 
 ## 4. 问题和风险
