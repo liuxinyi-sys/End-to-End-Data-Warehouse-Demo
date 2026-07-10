@@ -590,7 +590,7 @@ GET http://localhost:3000/api/health
 | 12 | 履约延迟 | 单值 Stat | ads_order_fulfillment_latency |
 | 13 | 流量峰值 Top 20 分钟 | 表格 | ads_traffic_peak_minutes |
 
-> 完整运行结果详见 [results/run-results-2026-07-09.md](results/run-results-2026-07-09.md)，Grafana 截图见 [results/screenshots/](results/screenshots/)。
+> 完整运行结果详见 [results/run-results-2026-07-09.md](results/run-results-2026-07-09.md)，Grafana 截图见 [results/Grafana截图/](results/Grafana截图/)。
 
 ---
 

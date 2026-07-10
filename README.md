@@ -19,13 +19,12 @@
 End-to-End-Data-Warehouse-Demo/
 ├── init_all.sh                          # [入口] 一键初始化脚本：等待就绪 → 建表 → ETL → 验证
 ├── README.md                            # 项目说明文档（本文件）
-├── AGENTS.md                            # AI 协作开发指南
 ├── report.md                            # 项目报告
 ├── ai_usage.md                          # AI 使用记录
 ├── config.example.yaml                  # 全部可配置参数参考
+├── convert_docx.py                      # supplementary.md → Word 转换脚本
 ├── docker-compose.yml                   # 三容器编排：MySQL + YMatrix + Grafana
-├── ymatrix_dw_demo_skill.md             # YMatrix 数仓使用技能文档
-├── .gitattributes                       
+├── .gitattributes
 ├── .gitignore
 │
 ├── mysql/
@@ -35,6 +34,7 @@ End-to-End-Data-Warehouse-Demo/
 │   ├── Dockerfile                       # 镜像构建文件（已预构建为 lxy0315/ymatrix5.2-clean:latest 上传 Docker Hub）
 │   ├── docker-entrypoint.sh             # 容器入口脚本：初始化 + 启动
 │   ├── matrixdb5-5.2.1+community-1.el7.x86_64.rpm   # YMatrix RPM 安装包（构建镜像用，普通用户无需关心）
+│   ├── matrixdb5_5.2.1+community-1_amd64.deb        # YMatrix DEB 安装包（构建镜像用，普通用户无需关心）
 │   ├── init/                            # 容器入口点 initdb 脚本（按编号顺序执行）
 │   │   ├── 01_init.sql                  # CREATE EXTENSION matrixts, APM 自动分区, dim_date 生成
 │   │   ├── 02_ods.sql                   # ODS 6 表 DDL（MARS3, TIMESTAMP(3), RANGE 月分区）
@@ -44,7 +44,8 @@ End-to-End-Data-Warehouse-Demo/
 │   │   ├── 05_ads.sql                   # 12 个 ADS 视图（含 ads_gmv_running_total 累计 GMV）
 │   │   └── 06_fdw.sql                   # mysql_fdw 联邦查询（可选展示）
 │   └── verify/
-│       └── 01_compression.sql           # MARS3 vs HEAP 压缩率对比查询
+│       ├── 01_compression.sql           # MARS3 vs HEAP 压缩率对比查询
+│       └── 02_benchmark.sql             # 查询性能 Benchmark（MARS3 vs HEAP, 分区裁剪, 物化视图）
 │
 ├── sync/                                # 数据同步 / ETL 引擎
 │   ├── sync_data.py                     # [入口] 编排全流程：extract → transform → load
@@ -55,8 +56,8 @@ End-to-End-Data-Warehouse-Demo/
 │   ├── load_dim.py                      # TRUNCATE + mxgate → DIM 维度表
 │   ├── load_dwd.py                      # SQL INSERT INTO...SELECT → DWD / REFRESH MV
 │   ├── verify.py                        # 21 项自动化断言验证 + etl_log 写入
-│   ├── requirements.txt                 # pandas, PyMySQL, psycopg2-binary, sqlalchemy
-│   └── __pycache__/                     # Python 字节码缓存（gitignored 之外的历史提交）
+│   ├── benchmark.py                     # 性能 Benchmark 脚本（MARS3 vs HEAP, 分区裁剪等）
+│   └── requirements.txt                 # 锁定版本：pandas==1.5.3, SQLAlchemy==1.4.52 等
 │
 ├── grafana/                             # Grafana 预置配置
 │   ├── datasources/
@@ -66,7 +67,11 @@ End-to-End-Data-Warehouse-Demo/
 │       └── provider.yaml               # Dashboard 自动加载配置
 │
 ├── docs/                                # 文档
-│   ├── supplementary.md                 # 补充文档：设计决策记录
+│   ├── supplementary.md                 # 补充文档：设计决策、验证场景、面试 Q&A
+│   ├── supplementary.docx              # 补充文档 Word 版本
+│   ├── ymatrix-data-warehouse-usage.md  # YMatrix 在数仓链路中的使用说明
+│   ├── ymatrix_dw_demo_skill.md        # YMatrix 数仓使用技能文档
+│   ├── 2026-07-06-ymatrix-dw-demo-design.md            # 初始架构设计
 │   ├── ecommerce-timeseries-verification-2026-07-09.md  # 时序验证报告
 │   ├── full-flow-repair-verification-2026-07-08.md      # 全链路修复验证
 │   ├── full-flow-test-report-2026-07-08.md              # 全链路测试报告
@@ -81,7 +86,11 @@ End-to-End-Data-Warehouse-Demo/
 │
 └── results/                             # 运行结果
     ├── run-results-2026-07-09.md        # 全链路运行结果记录
-    └── screenshots/                     # Grafana 仪表盘截图
+    ├── benchmark-results.md             # 性能 Benchmark 结果
+    ├── benchmark-results-2026-07-10.md  # Benchmark 结果（带时间戳）
+    ├── 运行日志.txt                     # 完整运行日志
+    ├── SQL 查询示例.docx                # SQL 查询示例 Word 文档
+    └── Grafana截图/                     # Grafana 仪表盘截图
 ```
 
 ---
@@ -218,11 +227,11 @@ cd sync && python benchmark.py 5
 
 结果输出到 `results/benchmark-results.md`。详细 SQL 版本见 `ymatrix/verify/02_benchmark.sql`。
 
-### 4.3 完整配置参考
+### 4.4 完整配置参考
 
 详见 [config.example.yaml](config.example.yaml)，包含 MySQL / YMatrix / ETL / Grafana / 数仓分层 / 验证阈值等全部可配置参数。
 
-### 4.4 YMatrix 初始化 SQL 顺序
+### 4.5 YMatrix 初始化 SQL 顺序
 
 ```
 ymatrix/init/
@@ -235,7 +244,7 @@ ymatrix/init/
 └── 06_fdw.sql         # mysql_fdw 联邦查询（可选展示）
 ```
 
-### 4.5 业务时区
+### 4.6 业务时区
 
 - 业务时区：`Asia/Shanghai`
 - 源时间字段：`orders.order_date`、`payments.pay_date`，升级为毫秒级 `DATETIME(3)`
