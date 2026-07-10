@@ -197,15 +197,11 @@ services:
 ```bash
 # 默认 20 万订单（开发验证）
 bash init_all.sh
-
-# 100 万订单（性能演示）
-ORDER_COUNT=1000000 bash init_all.sh
 ```
 
-| 规模 | 环境变量              | 订单数    | 实测耗时 | 用途                 |
-| ---- | --------------------- | --------- | -------- | -------------------- |
-| 默认 | `ORDER_COUNT=200000`  | 200,000   | ~80s     | 全链路验证（已实测） |
-| 性能 | `ORDER_COUNT=1000000` | 1,000,000 | ~5min    | 性能演示（线性预估） |
+| 规模 | 环境变量             | 订单数  | 实测耗时 | 用途                 |
+| ---- | -------------------- | ------- | -------- | -------------------- |
+| 默认 | `ORDER_COUNT=200000` | 200,000 | ~80s     | 全链路验证（已实测） |
 
 > **耗时瓶颈说明**：ETL 总耗时中，YMatrix 数据库本身的 SQL 操作（DWD INSERT..SELECT + 物化视图 REFRESH）仅占 ~15 秒（20 万订单），主要耗时在 `load_ods` 阶段——数据经 Python → `docker-compose exec` 子进程管道 → mxgate stdin 写入，单容器 + 子进程开销较大。在多节点 MPP 集群 + mxgate 服务模式下，写入吞吐可显著提升。详见 [results/benchmark-results.md](results/benchmark-results.md) §5 ETL 各阶段吞吐。
 
