@@ -327,11 +327,12 @@ Dashboard JSON 保存在 `grafana/dashboards/ymatrix_dw_demo.json`，通过 `pro
 
 通过环境变量 `ORDER_COUNT` 控制订单规模：
 
-| 规模 | 环境变量 | 订单数 | 预期耗时 | 用途 |
+| 规模 | 环境变量 | 订单数 | 实测耗时 | 用途 |
 |------|---------|--------|---------|------|
-| 默认 | `ORDER_COUNT=200000` | 200,000 | ~80s | 全链路验证 |
-| 性能 | `ORDER_COUNT=1000000` | 1,000,000 | ~5min | 性能演示 |
-| 压测 | `ORDER_COUNT=5000000` | 5,000,000 | ~25min | 极限压测 |
+| 默认 | `ORDER_COUNT=200000` | 200,000 | ~80s | 全链路验证（已实测） |
+| 性能 | `ORDER_COUNT=1000000` | 1,000,000 | ~5min | 性能演示（线性预估） |
+
+> **耗时瓶颈说明**：YMatrix 数据库 SQL 操作（DWD INSERT..SELECT + 物化视图 REFRESH）仅占 ~15 秒（20 万订单），主要耗时在 `load_ods` 阶段——数据经 Python → `docker-compose exec` 子进程管道 → mxgate stdin 写入。多节点 MPP 集群 + mxgate 服务模式下写入吞吐可显著提升。详见 [results/benchmark-results.md](results/benchmark-results.md) §5。
 
 ---
 
@@ -432,7 +433,7 @@ Dashboard JSON 保存在 `grafana/dashboards/ymatrix_dw_demo.json`，通过 `pro
 
 增强内容：
 
-1. 数据规模从 5 万提升到 20 万（可配置至 100 万/500 万）
+1. 数据规模从 5 万提升到 20 万（可配置至 100 万）
 2. 新增 `order_status_events` 表，支持状态漏斗和履约延迟分析
 3. 时间字段升级为 TIMESTAMP(3) 毫秒精度
 4. DWD 显式 Asia/Shanghai 时区转换

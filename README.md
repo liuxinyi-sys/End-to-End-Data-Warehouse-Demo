@@ -67,7 +67,7 @@ End-to-End-Data-Warehouse-Demo/
 │       └── provider.yaml               # Dashboard 自动加载配置
 │
 ├── docs/                                # 文档
-│   ├── supplementary.md                 # 补充文档：设计决策、验证场景、面试 Q&A
+│   ├── supplementary.md                 # 补充文档：设计决策、验证场景
 │   ├── supplementary.docx              # 补充文档 Word 版本
 │   ├── ymatrix-data-warehouse-usage.md  # YMatrix 在数仓链路中的使用说明
 │   ├── ymatrix_dw_demo_skill.md        # YMatrix 数仓使用技能文档
@@ -99,11 +99,11 @@ End-to-End-Data-Warehouse-Demo/
 
 ### 2.1 主机要求
 
-| 组件 | 最低版本 | 用途 | 下载 |
-|------|---------|------|------|
-| **Docker Desktop** | 4.20+ (引擎 24.0+) | 容器编排 MySQL + YMatrix + Grafana | [下载](https://www.docker.com/products/docker-desktop/) |
-| **Git** | 2.30+ | 克隆仓库、运行 init_all.sh | [下载](https://git-scm.com/) |
-| **Python** | 3.6+ | ETL 脚本（extract/transform/load/verify），代码兼容 3.6 | [下载](https://www.python.org/) |
+| 组件               | 最低版本           | 用途                                                    | 下载                                                    |
+| ------------------ | ------------------ | ------------------------------------------------------- | ------------------------------------------------------- |
+| **Docker Desktop** | 4.20+ (引擎 24.0+) | 容器编排 MySQL + YMatrix + Grafana                      | [下载](https://www.docker.com/products/docker-desktop/) |
+| **Git**            | 2.30+              | 克隆仓库、运行 init_all.sh                              | [下载](https://git-scm.com/)                            |
+| **Python**         | 3.6+               | ETL 脚本（extract/transform/load/verify），代码兼容 3.6 | [下载](https://www.python.org/)                         |
 
 > **说明**：MySQL 8.0、YMatrix 5.2.1、Grafana 均运行在 Docker 容器中，无需主机单独安装。Python 仅用于运行 ETL 脚本。
 
@@ -113,16 +113,16 @@ End-to-End-Data-Warehouse-Demo/
 pip install -r sync/requirements.txt
 ```
 
->如果直接 `pip install pandas sqlalchemy`（不指定版本），会安装 SQLAlchemy 2.0+，导致 ETL 报错 `AttributeError: 'OptionEngine' object has no attribute 'execute'`（详见 [§8.4](#84-python-依赖版本冲突attributeerror-optionengine-object-has-no-attribute-execute)）。
+> 如果直接 `pip install pandas sqlalchemy`（不指定版本），会安装 SQLAlchemy 2.0+，导致 ETL 报错 `AttributeError: 'OptionEngine' object has no attribute 'execute'`（详见 [§8.4](#84-python-依赖版本冲突attributeerror-optionengine-object-has-no-attribute-execute)）。
 
 依赖清单及锁定版本说明见 [sync/requirements.txt](sync/requirements.txt)。
 
 ### 2.3 Docker 资源建议
 
-| 资源 | 最低 | 推荐 |
-|------|------|------|
-| CPU | 2 核 | 4 核+ |
-| 内存 | 4 GB | 8 GB+ |
+| 资源 | 最低 | 推荐                             |
+| ---- | ---- | -------------------------------- |
+| CPU  | 2 核 | 4 核+                            |
+| 内存 | 4 GB | 8 GB+                            |
 | 磁盘 | 5 GB | 10 GB+（含 Docker 镜像约 1.5GB） |
 
 ---
@@ -144,11 +144,11 @@ docker-compose up -d
 
 Docker Compose 会自动从 Docker Hub 拉取三个镜像并启动容器：
 
-| 容器 | 镜像 | 端口 | 健康检查 |
-|------|------|------|---------|
-| e2e-mysql | mysql:8.0 | 3306 | mysqladmin ping |
-| e2e-ymatrix | lxy0315/ymatrix5.2-clean:latest | 5432 | psql SELECT 1 |
-| e2e-grafana | grafana/grafana:latest | 3000 | /api/health |
+| 容器        | 镜像                            | 端口 | 健康检查        |
+| ----------- | ------------------------------- | ---- | --------------- |
+| e2e-mysql   | mysql:8.0                       | 3306 | mysqladmin ping |
+| e2e-ymatrix | lxy0315/ymatrix5.2-clean:latest | 5432 | psql SELECT 1   |
+| e2e-grafana | grafana/grafana:latest          | 3000 | /api/health     |
 
 > 首次拉取 YMatrix 镜像约 364MB，后续直接使用本地缓存。
 
@@ -167,6 +167,7 @@ bash init_all.sh
 ```
 
 `init_all.sh` 按顺序执行：
+
 1. 等待 MySQL / YMatrix / Grafana 就绪
 2. 生成 CSV 种子数据（默认 20 万订单，10 城市，5 品类）
 3. `LOAD DATA LOCAL INFILE` 加载 CSV 到 MySQL
@@ -184,9 +185,9 @@ bash init_all.sh
 
 ```yaml
 services:
-  mysql:     # 端口 3306, 用户 root, 密码 root, 数据库 ecommerce
-  ymatrix:   # 端口 5432, 用户 mxadmin, 密码 mxadmin123, 数据库 dw_demo
-  grafana:   # 端口 3000, 用户 admin, 密码 admin
+  mysql: # 端口 3306, 用户 root, 密码 root, 数据库 ecommerce
+  ymatrix: # 端口 5432, 用户 mxadmin, 密码 mxadmin123, 数据库 dw_demo
+  grafana: # 端口 3000, 用户 admin, 密码 admin
 ```
 
 ### 4.2 数据规模配置
@@ -199,16 +200,14 @@ bash init_all.sh
 
 # 100 万订单（性能演示）
 ORDER_COUNT=1000000 bash init_all.sh
-
-# 500 万订单（极限压测）
-ORDER_COUNT=5000000 bash init_all.sh
 ```
 
-| 规模 | 环境变量 | 订单数 | 预期耗时 | 用途 |
-|------|---------|--------|---------|------|
-| 默认 | `ORDER_COUNT=200000` | 200,000 | ~80s | 全链路验证 |
-| 性能 | `ORDER_COUNT=1000000` | 1,000,000 | ~5min | 性能演示 |
-| 压测 | `ORDER_COUNT=5000000` | 5,000,000 | ~25min | 极限压测 |
+| 规模 | 环境变量              | 订单数    | 实测耗时 | 用途                 |
+| ---- | --------------------- | --------- | -------- | -------------------- |
+| 默认 | `ORDER_COUNT=200000`  | 200,000   | ~80s     | 全链路验证（已实测） |
+| 性能 | `ORDER_COUNT=1000000` | 1,000,000 | ~5min    | 性能演示（线性预估） |
+
+> **耗时瓶颈说明**：ETL 总耗时中，YMatrix 数据库本身的 SQL 操作（DWD INSERT..SELECT + 物化视图 REFRESH）仅占 ~15 秒（20 万订单），主要耗时在 `load_ods` 阶段——数据经 Python → `docker-compose exec` 子进程管道 → mxgate stdin 写入，单容器 + 子进程开销较大。在多节点 MPP 集群 + mxgate 服务模式下，写入吞吐可显著提升。详见 [results/benchmark-results.md](results/benchmark-results.md) §5 ETL 各阶段吞吐。
 
 ### 4.3 Benchmark 压测对比
 
@@ -218,12 +217,12 @@ ORDER_COUNT=5000000 bash init_all.sh
 cd sync && python benchmark.py 5
 ```
 
-| 对比维度 | 内容 | 示例结果 |
-|---------|------|---------|
-| 存储压缩 | MARS3 lz4 vs HEAP 同数据 | 节省 83.2% (96MB vs 573MB) |
-| 查询性能 | MARS3 vs HEAP 4 类查询 | 列存快 2.2~2.8x |
-| 分区裁剪 | 命中单分区 vs 全表扫描 | EXPLAIN 证明跳过 12/13 分区 |
-| 物化视图 | 预聚合 vs 实时 GROUP BY | 加速 8.1x |
+| 对比维度 | 内容                     | 示例结果                    |
+| -------- | ------------------------ | --------------------------- |
+| 存储压缩 | MARS3 lz4 vs HEAP 同数据 | 节省 83.2% (96MB vs 573MB)  |
+| 查询性能 | MARS3 vs HEAP 4 类查询   | 列存快 2.2~2.8x             |
+| 分区裁剪 | 命中单分区 vs 全表扫描   | EXPLAIN 证明跳过 12/13 分区 |
+| 物化视图 | 预聚合 vs 实时 GROUP BY  | 加速 8.1x                   |
 
 结果输出到 `results/benchmark-results.md`。详细 SQL 版本见 `ymatrix/verify/02_benchmark.sql`。
 
@@ -408,37 +407,37 @@ exit;
 
 访问 [http://localhost:3000](http://localhost:3000)（用户 admin / 密码 admin），预置 13 个面板：
 
-| # | 面板 | 图表类型 | 数据源 |
-|---|------|---------|--------|
-| 1 | 每日 GMV 趋势 | 折线图 | `ads_daily_gmv` |
-| 2 | 商品销售 Top 10 | 表格 | `ads_top_products` |
-| 3 | 品类销售占比 | 饼图 | `ads_category_sales` |
-| 4 | 用户复购率 | 单值 Stat | `ads_user_repurchase` |
-| 5 | GMV 按省份分布 | 柱状图 | `ads_gmv_by_region` |
-| 6 | 双11 累计 GMV | 折线图 | `ads_gmv_running_total` |
-| 7 | 双11 累计订单量 | 折线图 | `ads_gmv_running_total` |
-| 8 | 订单状态漏斗 | 柱状图 | `ads_order_status_funnel` |
-| 9 | 促销期 vs 日常期 | 条形仪表 | `ads_promo_compare` |
-| 10 | 用户价值分层 | 环形图 | `ads_user_segment` |
-| 11 | 双11 分钟级流量 | 折线图 | `ads_minute_traffic` |
-| 12 | 履约延迟 | 单值 Stat | `ads_order_fulfillment_latency` |
-| 13 | 流量峰值 Top 20 分钟 | 表格 | `ads_traffic_peak_minutes` |
+| #   | 面板                 | 图表类型  | 数据源                          |
+| --- | -------------------- | --------- | ------------------------------- |
+| 1   | 每日 GMV 趋势        | 折线图    | `ads_daily_gmv`                 |
+| 2   | 商品销售 Top 10      | 表格      | `ads_top_products`              |
+| 3   | 品类销售占比         | 饼图      | `ads_category_sales`            |
+| 4   | 用户复购率           | 单值 Stat | `ads_user_repurchase`           |
+| 5   | GMV 按省份分布       | 柱状图    | `ads_gmv_by_region`             |
+| 6   | 双11 累计 GMV        | 折线图    | `ads_gmv_running_total`         |
+| 7   | 双11 累计订单量      | 折线图    | `ads_gmv_running_total`         |
+| 8   | 订单状态漏斗         | 柱状图    | `ads_order_status_funnel`       |
+| 9   | 促销期 vs 日常期     | 条形仪表  | `ads_promo_compare`             |
+| 10  | 用户价值分层         | 环形图    | `ads_user_segment`              |
+| 11  | 双11 分钟级流量      | 折线图    | `ads_minute_traffic`            |
+| 12  | 履约延迟             | 单值 Stat | `ads_order_fulfillment_latency` |
+| 13  | 流量峰值 Top 20 分钟 | 表格      | `ads_traffic_peak_minutes`      |
 
 ### 6.2 核心业务指标（20 万订单默认规模）
 
-| 指标 | 数值 |
-|------|------|
-| MySQL orders | 200,000 |
-| MySQL order_items | 483,200 |
-| MySQL order_status_events | 699,451 |
-| 双11 GMV | ¥140,425,396 |
-| 日常日均 GMV | ¥2,852,071 |
-| 双11 GMV 倍数 | 49.2x 日常 |
-| 双11订单倍数 | 74x 日常 |
-| 用户复购率 | 45.8% |
-| MARS3 压缩节省 | 83.2% |
-| ETL 总耗时 | ~80 秒 |
-| 验证结果 | 21/21 PASS |
+| 指标                      | 数值         |
+| ------------------------- | ------------ |
+| MySQL orders              | 200,000      |
+| MySQL order_items         | 483,200      |
+| MySQL order_status_events | 699,451      |
+| 双11 GMV                  | ¥140,425,396 |
+| 日常日均 GMV              | ¥2,852,071   |
+| 双11 GMV 倍数             | 49.2x 日常   |
+| 双11订单倍数              | 74x 日常     |
+| 用户复购率                | 45.8%        |
+| MARS3 压缩节省            | 83.2%        |
+| ETL 总耗时                | ~80 秒       |
+| 验证结果                  | 21/21 PASS   |
 
 ### 6.3 自动化验证输出
 
@@ -604,11 +603,11 @@ net stop MySQL80          # 服务名可能是 MySQL80 / MySQL57 等
 
 为方便客户在端口冲突时快速调整，以下是项目中所有涉及端口的位置：
 
-| 端口 | 服务 | docker-compose.yml 位置 | 代码中引用位置 |
-|------|------|------------------------|--------------|
-| 3306 | MySQL | `mysql.ports` | [sync/extract.py:6](sync/extract.py#L6) 的 `MYSQL_URI` |
-| 5432 | YMatrix | `ymatrix.ports` | ETL 内部通过 `docker-compose exec` 连接容器，无需改 |
-| 3000 | Grafana | `grafana.ports` | 浏览器访问 `http://localhost:3000` |
+| 端口 | 服务    | docker-compose.yml 位置 | 代码中引用位置                                         |
+| ---- | ------- | ----------------------- | ------------------------------------------------------ |
+| 3306 | MySQL   | `mysql.ports`           | [sync/extract.py:6](sync/extract.py#L6) 的 `MYSQL_URI` |
+| 5432 | YMatrix | `ymatrix.ports`         | ETL 内部通过 `docker-compose exec` 连接容器，无需改    |
+| 3000 | Grafana | `grafana.ports`         | 浏览器访问 `http://localhost:3000`                     |
 
 > **修改原则**：只需修改 `docker-compose.yml` 中端口映射的**左侧**（主机端口），右侧（容器端口）保持不变。MySQL 主机端口修改后，需同步修改 `sync/extract.py` 中的 `MYSQL_URI` 端口号。YMatrix 和 Grafana 的主机端口修改后无需改代码（ETL 通过 `docker-compose exec` 容器内连接，不经过主机端口）。
 
@@ -628,11 +627,11 @@ AttributeError: 'OptionEngine' object has no attribute 'execute'
 
 SQLAlchemy 2.0（2023 年 1 月发布）移除了 `engine.execute()` 方法。pandas 1.x 的 `pd.read_sql(sql_string, engine)` 在内部调用 `engine.execute()`，如果用户环境安装了 SQLAlchemy 2.0+，就会触发此错误。
 
-| 组件 | SQLAlchemy < 2.0 | SQLAlchemy 2.0+ |
-|------|-------------------|-----------------|
-| `engine.execute()` | 支持（弃用警告） | **已移除** |
-| `pd.read_sql("SELECT ...", engine)` | ✅ 正常 | ❌ 报错 |
-| `pd.read_sql(text("SELECT ..."), engine)` | ✅ 正常 | ✅ 正常 |
+| 组件                                      | SQLAlchemy < 2.0 | SQLAlchemy 2.0+ |
+| ----------------------------------------- | ---------------- | --------------- |
+| `engine.execute()`                        | 支持（弃用警告） | **已移除**      |
+| `pd.read_sql("SELECT ...", engine)`       | ✅ 正常          | ❌ 报错         |
+| `pd.read_sql(text("SELECT ..."), engine)` | ✅ 正常          | ✅ 正常         |
 
 **解决方案**：
 
@@ -694,10 +693,10 @@ cd sync
 pip install -r requirements.txt
 ```
 
-| 包 | 锁定版本 | 用途 | 备注 |
-|----|---------|------|------|
-| pandas | 1.5.3 | 数据清洗与 DataFrame 操作 | 1.5.x 最后稳定版，兼容 Python 3.8+ |
-| numpy | 1.24.4 | 数值计算 | pandas 1.5.3 的依赖 |
-| PyMySQL | 1.1.0 | Python → MySQL 连接驱动 | extract.py 使用 |
-| psycopg2-binary | 2.9.9 | Python → YMatrix 连接驱动 | PostgreSQL 协议 |
-| SQLAlchemy | 1.4.52 | ORM 引擎 | **必须 < 2.0**，否则 `pd.read_sql` 报错 |
+| 包              | 锁定版本 | 用途                      | 备注                                    |
+| --------------- | -------- | ------------------------- | --------------------------------------- |
+| pandas          | 1.5.3    | 数据清洗与 DataFrame 操作 | 1.5.x 最后稳定版，兼容 Python 3.8+      |
+| numpy           | 1.24.4   | 数值计算                  | pandas 1.5.3 的依赖                     |
+| PyMySQL         | 1.1.0    | Python → MySQL 连接驱动   | extract.py 使用                         |
+| psycopg2-binary | 2.9.9    | Python → YMatrix 连接驱动 | PostgreSQL 协议                         |
+| SQLAlchemy      | 1.4.52   | ORM 引擎                  | **必须 < 2.0**，否则 `pd.read_sql` 报错 |
