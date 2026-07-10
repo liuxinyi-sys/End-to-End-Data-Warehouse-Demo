@@ -1,7 +1,0 @@
-[
-  {"command":"add","parent":"/body","type":"paragraph","props":{"text":"① 分层架构展示：实现 ODS → DIM → DWD → DWS → ADS 五层数仓分层，每一层职责清晰——ODS 贴源、DIM 维度、DWD 明细事实、DWS 预聚合、ADS 面向业务指标。这不是简单地把数据从 A 搬到 B，而是要让每一层的存在都有业务意义。","size":"11pt","lineSpacing":"1.3x","spaceAfter":"6pt","align":"justify"}},
-  {"command":"add","parent":"/body","type":"paragraph","props":{"text":"② YMatrix 引擎特性展示：MARS3 列存 + lz4 压缩（对比 HEAP 行存节省 83%+ 存储）、mxgate 高速并行写入、time_bucket 时序聚合、物化视图预聚合、RANGE 分区。这些特性不是堆砌，而是各自对应一个真实数仓痛点——存储成本、写入吞吐、时序查询、预计算、分区裁剪。","size":"11pt","lineSpacing":"1.3x","spaceAfter":"6pt","align":"justify"}},
-  {"command":"add","parent":"/body","type":"paragraph","props":{"text":"③ 业务指标可见：11+ 个 ADS 指标可直接在 YMatrix 中查询，覆盖每日 GMV、商品排行、品类占比、用户复购率、省份分布、双11累计 GMV、分钟级流量、状态漏斗、履约延迟等真实电商场景，并在 Grafana 13 个面板中零代码可视化。","size":"11pt","lineSpacing":"1.3x","spaceAfter":"6pt","align":"justify"}},
-  {"command":"add","parent":"/body","type":"paragraph","props":{"text":"④ 时序能力验证：构造双11大促场景（权重 100 倍于日常），通过 time_bucket 分钟级流量聚合、SUM OVER ROWS 窗口函数实现累计 GMV 单调递增、状态事件漏斗、履约延迟计算，展示 YMatrix 在时序数据上的查询能力。","size":"11pt","lineSpacing":"1.3x","spaceAfter":"6pt","align":"justify"}},
-  {"command":"add","parent":"/body","type":"paragraph","props":{"text":"⑤ 可运行性优先：整个 Demo 只需一条命令、一个 Docker 环境，从建库到出图全程自动化，包含 21 项自动化断言验证。目标不是“能跑就行”，而是“任何人 clone 下来就能复现”。","size":"11pt","lineSpacing":"1.3x","spaceAfter":"10pt","align":"justify"}}
-]

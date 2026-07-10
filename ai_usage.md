@@ -5,7 +5,26 @@
 | 工具 | 版本/模型 | 用途 |
 |------|----------|------|
 | Codex (GPT-5) | 2026.07 | 项目设计文档、设计审阅、DDL 生成、ETL 代码、文档写作 |
-| DimCode (Claude) | 2026.07 | Plan 执行、集成测试调试、跨平台问题修复、验证报告生成 |
+| DimAgent (Claude) | 2026.07 | Plan 执行、集成测试调试、跨平台问题修复、验证报告生成 |
+
+### 使用的 Skills
+
+| Skill | 作用 | 使用阶段 |
+|-------|------|---------|
+| OpenSpec | 规范驱动开发：定义需求规格 (spec) 和实施计划 (plan)，让 AI 严格按规格而非凭直觉编码 | 设计阶段（Codex 侧）输出 spec，执行阶段对照 plan 推进 |
+| Superpowers | 内含多个子技能，约束 AI 的工作方法，避免"拍脑袋"式产出 | 全流程：头脑风暴→实施→验证→调试 |
+
+Superpowers 中实际调用的子技能：
+
+| 子技能 | 触发场景 |
+|--------|---------|
+| `brainstorming` | 架构与数据合理性评审：指出 order_items 价格与商品脱钩、订单分布过于均匀、缺少时序能力等问题 |
+| `verification-before-completion` | 全链路集成测试：要求在标记完成前跑通 21 项断言，并记录到 md 文档 |
+| `systematic-debugging` | 根据测试报告系统化修复 bug，而非随机猜测 |
+
+OpenSpec 产出的规格/计划文件位于 `docs/superpowers/`，例如：
+- `specs/2026-07-09-ecommerce-business-timeseries-design.md`（设计规格）
+- `plans/2026-07-09-ecommerce-business-timeseries-implementation.md`（实施计划）
 
 ## 2. 关键 Prompt 示例
 
@@ -40,7 +59,7 @@ ODS（原始层）→ DWD（明细层）→ DWS（汇总层）→ ADS（应用�
 数据特征和表结构不对，表结构 中少了dim_date 、dim_region
 ```
 
-### Plan 执行阶段（DimCode）
+### Plan 执行阶段（DimAgent）
 ```
 [提供了 plan 文件 2026-07-09-ecommerce-business-timeseries-implementation.md]
 根据 plan 文件继续执行未完成的内容，已经进行到 task3 了。
@@ -51,7 +70,6 @@ ODS（原始层）→ DWD（明细层）→ DWS（汇总层）→ ADS（应用�
 
 [$superpowers:verification-before-completion](C:\\Users\\82044\\.codex\\plugins\\cache\\openai-api-curated\\superpowers\\d6169bef\\skills\\verification-before-completion\\SKILL.md) 你来帮我进行全流程测试，遇到问题查日志检查，记录到md文档中。
 
-你来帮我进行全流程测试，遇到问题查日志检查，记录到md文档中。
 [$superpowers:systematic-debugging](C:\\Users\\82044\\.codex\\plugins\\cache\\openai-api-curated\\superpowers\\d6169bef\\skills\\systematic-debugging\\SKILL.md) 根据测试报告修bug
 
 [$superpowers:brainstorming](C:\\Users\\82044\\.codex\\plugins\\cache\\openai-api-curated\\superpowers\\d6169bef\\skills\\brainstorming\\SKILL.md) 查看当前的项目，生成的数据合理吗？是不是会生成偏差（例如商品是食品但品牌是美妆）指标正确吗？能完成向客户展示YMatrix 在数仓场景中的完整使⽤⽅式的目标吗？
@@ -86,9 +104,9 @@ ODS（原始层）→ DWD（明细层）→ DWS（汇总层）→ ADS（应用�
 | Python ETL (7 个脚本) | 85% | mxgate 加载、pandas 清洗、SQL INSERT..SELECT、验证脚本 |
 | 数据生成 (gen_data.py) | 100% | 可信电商数据：5 品类 25 品牌、双11加权流量、状态事件流 |
 | Grafana Dashboard | 100% | 6 面板 JSON 预置配置 |
-| 跨平台修复 | 100% | CRLF 行尾、mxgate TRUNCATE、时区转换、DWS 列歧义 |
-| 文档写作 | 100% | README.md、report.md、ai_usage.md、config.example.yaml |
-| 集成测试 | 100% | 21/21 自动化验证通过 |
+| 跨平台修复 | 50% | CRLF 行尾、mxgate TRUNCATE、时区转换、DWS 列歧义 |
+| 文档写作 | 80% | README.md、report.md、ai_usage.md、config.example.yaml |
+| 集成测试 | 90% | 21/21 自动化验证通过 |
 
 ## 4. AI 生成内容中出现过的问题
 
@@ -103,6 +121,8 @@ ODS（原始层）→ DWD（明细层）→ DWS（汇总层）→ ADS（应用�
 | 7 | MySQL LOAD DATA CRLF | `status` 字段值含 `\r` | CSV CRLF + `LINES TERMINATED BY '\n'` | gen_data.py 输出 LF 行尾 |
 | 8 | verify.py 阈值过时 | region 检查 `== 4` 失败 | 旧 5 城市改为 10 城市 | 更新为 `>= 5` |
 | 9 | 批量文件转换 bug | Python 脚本清空文件 | `open(f,'wb')` 先截断再读 | 从 git restore 恢复 |
+| 10 | 未参考官方文档导致语法/参数错误 | MARS3 建表参数、`time_bucket` 用法、`mxgate` 参数与官方文档不一致 | AI 凭记忆生成 SQL，未先查阅 YMatrix 5.2 官方文档 | 人工核对 https://ymatrix.cn/zh/doc/5.2 后修正参数与语法 |
+| 11 | 排查方向偏离实际根因 | 在路径相关错误上反复排查容器内/代码逻辑，迟迟未命中 | AI 看不到宿主机实际文件路径状态，把环境/路径问题误判为代码问题 | 人工指出路径问题后立即定位（如 `SEED_OUTPUT_DIR` 传递 Unix 路径给 Windows Python） |
 
 ## 5. 你如何验证和修正
 
@@ -123,13 +143,24 @@ Grafana: {"database":"ok"}
 
 ## 6. 如果不使用 AI，预计需要多久完成
 
-| 阶段 | AI 辅助 | 纯人工估计 | 节省倍数 |
-|------|---------|-----------|---------|
-| 架构设计 + 文档 | 2h | 8-12h | 5x |
-| DDL + ETL 代码 | 3h | 16-20h | 6x |
-| 数据生成器 | 1h | 6-8h | 7x |
-| 跨平台调试 | 2h | 8-12h | 5x |
-| 文档 + 验证报告 | 1h | 4-6h | 5x |
-| **总计** | **~9h** | **42-58h** | **~5x** |
+实际 AI 辅助开发周期约 **3 天**，时间分配如下：
 
-> 注：跨平台调试（CRLF、mxgate、时区）是 AI 加速最显著的部分。AI 能快速定位错误日志中的关键信息并给出修复方案，人工排查通常需要反复试错。
+| 阶段 | AI 辅助耗时 | 说明 |
+|------|------------|------|
+| 设计（架构 + 数据建模 + spec/plan） | 约 1.5 天 | 约占一半时间：数仓五层架构、电商场景、YMatrix 特性选型、OpenSpec 规格 |
+| 部署与排查错误（集成调试 + 跨平台修复） | 约 1.5 天 | 约占一半时间：CRLF、mxgate、时区、路径等跨平台问题 |
+| 文档与总结 | 少量 | README、report、ai_usage、验证报告 |
+| **合计** | **约 3 天** | |
+
+如果不使用 AI，预计需要 **7 天以上**，主要增加在：
+
+| 阶段 | 纯人工估计 | 膨胀原因 |
+|------|-----------|---------|
+| 架构设计 + spec/文档 | 2-3 天 | 需自行研读 YMatrix 文档、设计分层、撰写规格，AI 可快速产出初稿并评审 |
+| DDL + ETL + 数据生成代码 | 2-3 天 | 9 个 SQL 文件 + 7 个 Python 脚本 + 可信数据生成器，纯手写量大 |
+| 跨平台部署与调试 | 2-3 天 | CRLF、mxgate、时区、路径等需反复试错，AI 能从错误日志快速定位关键信息 |
+| 文档与验证报告 | 1 天 | 自动化验证脚本与报告需自行编写 |
+
+> **AI 加速最显著的部分：跨平台调试（CRLF、mxgate、时区、路径）。** AI 能快速定位错误日志中的关键信息并给出修复方案，人工排查通常需要反复试错。
+>
+> **AI 的主要短板：** 未参考官方文档时易生成错误参数/语法（问题 #10）；遇到路径/环境类问题易往代码逻辑方向误判，需人工指正方向（问题 #11）。这两类问题使"部署排查"阶段占用了一半时间。

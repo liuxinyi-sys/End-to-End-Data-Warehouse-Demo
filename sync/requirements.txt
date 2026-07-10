@@ -1,7 +1,7 @@
-# Python 3.6+ 兼容版本
+# Python 3.8+ 兼容版本（已锁定，避免 SQLAlchemy 2.0 不兼容问题）
 # 代码仅使用 3.6 兼容语法（f-string 等），但实际在 3.8+ 环境运行验证通过
-pandas>=1.1.5
-numpy>=1.16.5
-PyMySQL>=0.9.3
-psycopg2-binary>=2.8.0
-sqlalchemy>=1.3.24
+pandas==1.5.3
+numpy==1.24.4
+PyMySQL==1.1.0
+psycopg2-binary==2.9.9
+SQLAlchemy==1.4.52

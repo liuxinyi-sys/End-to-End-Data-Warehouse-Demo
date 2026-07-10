@@ -1,9 +1,9 @@
 """Extract data from MySQL into pandas DataFrames."""
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from typing import Dict
 
-MYSQL_URI = "mysql+pymysql://root:root@localhost:3306/ecommerce?charset=utf8mb4"
+MYSQL_URI = "mysql+pymysql://root:root@localhost:3307/ecommerce?charset=utf8mb4"
 TABLES = ["users", "products", "orders", "order_items", "payments", "order_status_events"]
 
 def extract_all() -> Dict[str, pd.DataFrame]:
@@ -11,7 +11,7 @@ def extract_all() -> Dict[str, pd.DataFrame]:
     result = {}
     for table in TABLES:
         print(f"Extracting {table}...")
-        df = pd.read_sql(f"SELECT * FROM {table}", engine)
+        df = pd.read_sql(text(f"SELECT * FROM {table}"), engine)
         result[table] = df
         print(f"  -> {len(df)} rows")
     engine.dispose()

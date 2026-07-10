@@ -101,10 +101,12 @@ End-to-End-Data-Warehouse-Demo/
 ### 2.2 Python 依赖
 
 ```bash
-pip install pandas numpy PyMySQL psycopg2-binary sqlalchemy
+pip install -r sync/requirements.txt
 ```
 
-依赖清单见 [sync/requirements.txt](sync/requirements.txt)。
+>如果直接 `pip install pandas sqlalchemy`（不指定版本），会安装 SQLAlchemy 2.0+，导致 ETL 报错 `AttributeError: 'OptionEngine' object has no attribute 'execute'`（详见 [§8.4](#84-python-依赖版本冲突attributeerror-optionengine-object-has-no-attribute-execute)）。
+
+依赖清单及锁定版本说明见 [sync/requirements.txt](sync/requirements.txt)。
 
 ### 2.3 Docker 资源建议
 
@@ -198,6 +200,23 @@ ORDER_COUNT=5000000 bash init_all.sh
 | 默认 | `ORDER_COUNT=200000` | 200,000 | ~80s | 全链路验证 |
 | 性能 | `ORDER_COUNT=1000000` | 1,000,000 | ~5min | 性能演示 |
 | 压测 | `ORDER_COUNT=5000000` | 5,000,000 | ~25min | 极限压测 |
+
+### 4.3 Benchmark 压测对比
+
+初始化完成后，运行 benchmark 脚本生成 4 维度性能对比报告:
+
+```bash
+cd sync && python benchmark.py 5
+```
+
+| 对比维度 | 内容 | 示例结果 |
+|---------|------|---------|
+| 存储压缩 | MARS3 lz4 vs HEAP 同数据 | 节省 83.2% (96MB vs 573MB) |
+| 查询性能 | MARS3 vs HEAP 4 类查询 | 列存快 2.2~2.8x |
+| 分区裁剪 | 命中单分区 vs 全表扫描 | EXPLAIN 证明跳过 12/13 分区 |
+| 物化视图 | 预聚合 vs 实时 GROUP BY | 加速 8.1x |
+
+结果输出到 `results/benchmark-results.md`。详细 SQL 版本见 `ymatrix/verify/02_benchmark.sql`。
 
 ### 4.3 完整配置参考
 
@@ -446,3 +465,230 @@ exit;
 - **无 HA / 容错**：未配置 Mirror 镜像 / 数据备份 / 故障自动转移
 - **YMatrix 社区版**：部分企业功能（如 Domino 连续视图、Kafka 直连）不可用
 - **跨平台**：已通过 `.gitattributes` 强制 LF 行尾解决 Windows CRLF 问题，推荐在 Git Bash 中运行 `init_all.sh`
+
+---
+
+## 8. 部署常见问题及解决方案
+
+> 以下问题均在**纯净 Windows 环境模拟客户现场部署**时实际遇到并验证过。
+
+### 8.1 Docker Desktop 安装失败 / WSL 安装损坏
+
+**适用场景**：在未安装过 Docker 的 Windows 电脑上首次安装 Docker Desktop。
+
+**问题现象**：
+
+Docker Desktop 安装过程中提示 WSL 相关错误，安装无法完成，或安装后启动时报 WSL 内核异常。
+
+**原因分析**：
+
+- Docker Desktop on Windows 依赖 WSL2（Windows Subsystem for Linux 2）。
+- 如果系统之前有残留的损坏安装痕迹（如 `C:\Program Files` 下存在 **0 字节空位文件**），WSL 组件可能无法正常初始化。
+- 某些 Windows 版本未默认启用 WSL2 或虚拟机平台功能。
+
+**解决方案**：
+
+1. **清理残留文件**：检查 `C:\Program Files` 下是否有 0 字节的空位文件（可能是之前安装失败残留），手动删除后重新安装 Docker Desktop。
+2. **手动启用 WSL2**：以管理员身份打开 PowerShell，执行：
+   ```powershell
+   dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+   dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+   ```
+   重启电脑后，安装 [WSL2 Linux 内核更新包](https://aka.ms/wsl2kernel)，再安装 Docker Desktop。
+3. **验证**：`docker --version` 和 `docker-compose --version` 正常输出即可。
+
+> **提示**：如果本机已安装其他 MySQL 服务（见下节端口冲突），建议在安装 Docker 前先确认本机端口占用情况。
+
+---
+
+### 8.2 MySQL 端口 3306 冲突
+
+**适用场景**：本机已安装 MySQL 服务，或 3306 端口被其他程序占用。
+
+**问题现象**：
+
+执行 `docker-compose up -d` 时，MySQL 容器无法启动，终端返回：
+
+```text
+Error response from daemon: ports are not available: exposing port TCP 0.0.0.0:3306
+  -> 127.0.0.1:0: listen tcp 0.0.0.0:3306: bind:
+  Only one usage of each socket address (protocol/network address/port) is normally permitted.
+```
+
+**原因分析**：
+
+本机已有 MySQL 服务（`mysqld.exe`）默认监听 3306 端口，而 Docker Compose 中 MySQL 容器也映射主机端口 3306 → 容器端口 3306，两者冲突。
+
+**排查命令**：
+
+```bash
+# 查看占用 3306 的进程
+netstat -ano | findstr :3306
+
+# 确认进程名（替换 PID 为上一步查到的值）
+tasklist /FI "PID eq <PID>"
+```
+
+如果输出 `mysqld.exe`，说明是本机 MySQL 服务占用了端口。
+
+**解决方案（推荐）：修改主机端口映射**
+
+将 Docker Compose 中 MySQL 的**主机端口**（左侧）从 3306 改为 3307，容器内端口（右侧）保持 3306 不变：
+
+**第 1 步**：编辑 `docker-compose.yml`
+
+```yaml
+# 修改前
+mysql:
+  ports:
+    - "3306:3306"
+
+# 修改后
+mysql:
+  ports:
+    - "3307:3306"     # 左侧主机端口改为 3307，右侧容器端口不变
+```
+
+**第 2 步**：同步修改 `sync/extract.py` 中的连接端口号（ETL 脚本通过主机端口连接 MySQL）：
+
+```python
+# sync/extract.py 第 6 行
+# 修改前
+MYSQL_URI = "mysql+pymysql://root:root@localhost:3306/ecommerce?charset=utf8mb4"
+
+# 修改后
+MYSQL_URI = "mysql+pymysql://root:root@localhost:3307/ecommerce?charset=utf8mb4"
+```
+
+**第 3 步**：重新启动容器并执行初始化：
+
+```bash
+docker-compose down
+docker-compose up -d
+bash init_all.sh
+```
+
+**验证**：
+
+```bash
+# 容器状态为 Up (healthy)
+docker-compose ps
+
+# 可通过 3307 端口连接容器内 MySQL
+mysql -h 127.0.0.1 -P 3307 -u root -proot -D ecommerce -e "SELECT 1"
+```
+
+**备选方案（不推荐）**：停止本机 MySQL 服务
+
+如果必须使用 3306 端口，可以停止本机 MySQL 服务：
+
+```bash
+# 以管理员身份运行
+net stop MySQL80          # 服务名可能是 MySQL80 / MySQL57 等
+```
+
+> ⚠️ 此方案会影响客户本机已有 MySQL 服务的正常运行，不适用于多服务共存的客户环境。**推荐使用修改端口方案**。
+
+---
+
+### 8.3 端口可配置说明
+
+为方便客户在端口冲突时快速调整，以下是项目中所有涉及端口的位置：
+
+| 端口 | 服务 | docker-compose.yml 位置 | 代码中引用位置 |
+|------|------|------------------------|--------------|
+| 3306 | MySQL | `mysql.ports` | [sync/extract.py:6](sync/extract.py#L6) 的 `MYSQL_URI` |
+| 5432 | YMatrix | `ymatrix.ports` | ETL 内部通过 `docker-compose exec` 连接容器，无需改 |
+| 3000 | Grafana | `grafana.ports` | 浏览器访问 `http://localhost:3000` |
+
+> **修改原则**：只需修改 `docker-compose.yml` 中端口映射的**左侧**（主机端口），右侧（容器端口）保持不变。MySQL 主机端口修改后，需同步修改 `sync/extract.py` 中的 `MYSQL_URI` 端口号。YMatrix 和 Grafana 的主机端口修改后无需改代码（ETL 通过 `docker-compose exec` 容器内连接，不经过主机端口）。
+
+---
+
+### 8.4 Python 依赖版本冲突：`AttributeError: 'OptionEngine' object has no attribute 'execute'`
+
+**适用场景**：执行 ETL 脚本（`python sync_data.py`）时。
+
+**问题现象**：
+
+```text
+AttributeError: 'OptionEngine' object has no attribute 'execute'
+```
+
+**原因分析**：
+
+SQLAlchemy 2.0（2023 年 1 月发布）移除了 `engine.execute()` 方法。pandas 1.x 的 `pd.read_sql(sql_string, engine)` 在内部调用 `engine.execute()`，如果用户环境安装了 SQLAlchemy 2.0+，就会触发此错误。
+
+| 组件 | SQLAlchemy < 2.0 | SQLAlchemy 2.0+ |
+|------|-------------------|-----------------|
+| `engine.execute()` | 支持（弃用警告） | **已移除** |
+| `pd.read_sql("SELECT ...", engine)` | ✅ 正常 | ❌ 报错 |
+| `pd.read_sql(text("SELECT ..."), engine)` | ✅ 正常 | ✅ 正常 |
+
+**解决方案**：
+
+本项目已通过两种方式修复，用户任选其一即可：
+
+#### 方式一（推荐）：使用已锁定的 requirements.txt 安装
+
+```bash
+cd sync
+pip install -r requirements.txt
+```
+
+requirements.txt 已锁定为经过验证的兼容版本组合：
+
+```
+pandas==1.5.3
+numpy==1.24.4
+PyMySQL==1.1.0
+psycopg2-binary==2.9.9
+SQLAlchemy==1.4.52          # 锁定 1.4.x，避免 2.0 不兼容
+```
+
+如果之前已安装高版本 SQLAlchemy，需先卸载再安装：
+
+```bash
+pip uninstall SQLAlchemy -y
+pip install SQLAlchemy==1.4.52
+```
+
+#### 方式二：升级 pandas + SQLAlchemy 2.0（代码已兼容）
+
+extract.py 已改用 `text()` 包装 SQL 语句，同时兼容 SQLAlchemy 1.4 和 2.0：
+
+```python
+# 修改前（仅兼容 SQLAlchemy 1.x）
+df = pd.read_sql(f"SELECT * FROM {table}", engine)
+
+# 修改后（兼容 1.4 和 2.0）
+from sqlalchemy import text
+df = pd.read_sql(text(f"SELECT * FROM {table}"), engine)
+```
+
+如使用此方式，安装兼容版本：
+
+```bash
+pip install "pandas>=2.0" "SQLAlchemy>=2.0"
+```
+
+> **验证**：运行 `python -c "from sqlalchemy import text; print('OK')"` 无报错即正常。
+
+---
+
+### 8.5 依赖安装汇总
+
+一键安装所有 Python 依赖（推荐使用锁定版本）：
+
+```bash
+cd sync
+pip install -r requirements.txt
+```
+
+| 包 | 锁定版本 | 用途 | 备注 |
+|----|---------|------|------|
+| pandas | 1.5.3 | 数据清洗与 DataFrame 操作 | 1.5.x 最后稳定版，兼容 Python 3.8+ |
+| numpy | 1.24.4 | 数值计算 | pandas 1.5.3 的依赖 |
+| PyMySQL | 1.1.0 | Python → MySQL 连接驱动 | extract.py 使用 |
+| psycopg2-binary | 2.9.9 | Python → YMatrix 连接驱动 | PostgreSQL 协议 |
+| SQLAlchemy | 1.4.52 | ORM 引擎 | **必须 < 2.0**，否则 `pd.read_sql` 报错 |
