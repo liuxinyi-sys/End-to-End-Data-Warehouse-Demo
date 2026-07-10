@@ -1,0 +1,308 @@
+82044@Liuxy MINGW64 /d/End-to-End-Data-Warehouse-Demo (main)
+$ docker-compose up -d
+[+] Running 6/6
+ ✔ Network end-to-end-data-warehouse-demo_default        Created                                            0.0s 
+ ✔ Volume "end-to-end-data-warehouse-demo_mysql-data"    Created                                            0.0s 
+ ✔ Volume "end-to-end-data-warehouse-demo_grafana-data"  Created                                            0.0s 
+ ✔ Container e2e-mysql                                   Started                                            0.8s 
+ ✔ Container e2e-ymatrix                                 Healthy                                           50.3s 
+ ✔ Container e2e-grafana                                 Started                                           50.4s 
+
+82044@Liuxy MINGW64 /d/End-to-End-Data-Warehouse-Demo (main)
+$ bash init_all.sh
+=== YMatrix DW Demo - Init All ===
+Waiting for MySQL...
+mysqladmin: [Warning] Using a password on the command line interface can be insecure.
+Waiting for YMatrix...
+Waiting for Grafana...
+All services are ready.
+Step 1: Generating seed data
+users: 10000 rows (5500 inactive, 2500 one-time, 2000 repeat)
+products: 500 rows
+orders: 200000 rows
+order_items: 483200 rows
+payments: 189956 rows
+order_status_events: 699451 rows
+All seed CSV files generated in D:\End-to-End-Data-Warehouse-Demo\sync
+Step 2: Resetting and loading MySQL data
+mysql: [Warning] Using a password on the command line interface can be insecure.
+mysql: [Warning] Using a password on the command line interface can be insecure.
+  Loading users from seed_users.csv
+mysql: [Warning] Using a password on the command line interface can be insecure.
+  Loading products from seed_products.csv
+mysql: [Warning] Using a password on the command line interface can be insecure.
+  Loading orders from seed_orders.csv
+mysql: [Warning] Using a password on the command line interface can be insecure.
+  Loading order_items from seed_order_items.csv
+mysql: [Warning] Using a password on the command line interface can be insecure.
+  Loading payments from seed_payments.csv
+mysql: [Warning] Using a password on the command line interface can be insecure.
+  Loading order_status_events from seed_order_status_events.csv
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Step 3: MySQL verification...
+mysql: [Warning] Using a password on the command line interface can be insecure.
+table_name      row_count
+users   10000
+products        500
+orders  200000
+order_items     483200
+payments        189956
+order_status_events     699451
+Step 4: Resetting YMatrix warehouse objects...
+NOTICE:  view "ads_daily_gmv" does not exist, skipping
+DROP VIEW
+NOTICE:  view "ads_top_products" does not exist, skipping
+DROP VIEW
+NOTICE:  view "ads_category_sales" does not exist, skipping
+DROP VIEW
+NOTICE:  view "ads_user_repurchase" does not exist, skipping
+DROP VIEW
+NOTICE:  view "ads_user_segment" does not exist, skipping
+DROP VIEW
+NOTICE:  view "ads_gmv_by_region" does not exist, skipping
+DROP VIEW
+NOTICE:  view "ads_promo_compare" does not exist, skipping
+DROP VIEW
+NOTICE:  view "ads_gmv_running_total" does not exist, skipping
+DROP VIEW
+NOTICE:  view "ads_minute_traffic" does not exist, skipping
+DROP VIEW
+NOTICE:  view "ads_traffic_peak_minutes" does not exist, skipping
+DROP VIEW
+NOTICE:  view "ads_order_status_funnel" does not exist, skipping
+DROP VIEW
+NOTICE:  view "ads_order_fulfillment_latency" does not exist, skipping
+DROP VIEW
+NOTICE:  materialized view "dws_daily_gmv" does not exist, skipping
+DROP MATERIALIZED VIEW
+NOTICE:  materialized view "dws_product_daily_sales" does not exist, skipping
+DROP MATERIALIZED VIEW
+NOTICE:  materialized view "dws_user_purchase_stats" does not exist, skipping
+DROP MATERIALIZED VIEW
+NOTICE:  materialized view "dws_minute_order_traffic" does not exist, skipping
+DROP MATERIALIZED VIEW
+NOTICE:  materialized view "dws_order_status_funnel" does not exist, skipping
+DROP MATERIALIZED VIEW
+NOTICE:  materialized view "dws_order_fulfillment_latency" does not exist, skipping
+DROP MATERIALIZED VIEW
+NOTICE:  materialized view "dws_promo_daily_compare" does not exist, skipping
+DROP MATERIALIZED VIEW
+NOTICE:  table "dwd_order_status_event_fact" does not exist, skipping
+DROP TABLE
+NOTICE:  table "dwd_order_detail_fact" does not exist, skipping
+DROP TABLE
+NOTICE:  table "dwd_order_fact" does not exist, skipping
+DROP TABLE
+NOTICE:  table "dim_user" does not exist, skipping
+DROP TABLE
+NOTICE:  table "dim_product" does not exist, skipping
+DROP TABLE
+NOTICE:  table "dim_promotion" does not exist, skipping
+DROP TABLE
+NOTICE:  table "dim_region" does not exist, skipping
+DROP TABLE
+NOTICE:  table "dim_date" does not exist, skipping
+DROP TABLE
+NOTICE:  table "ods_orders_heap" does not exist, skipping
+DROP TABLE
+NOTICE:  table "ods_orders_mars_compare" does not exist, skipping
+DROP TABLE
+NOTICE:  table "ods_products" does not exist, skipping
+DROP TABLE
+NOTICE:  table "ods_users" does not exist, skipping
+DROP TABLE
+NOTICE:  table "ods_payments" does not exist, skipping
+DROP TABLE
+NOTICE:  table "ods_order_items" does not exist, skipping
+DROP TABLE
+NOTICE:  table "ods_order_status_events" does not exist, skipping
+DROP TABLE
+NOTICE:  table "ods_orders" does not exist, skipping
+DROP TABLE
+NOTICE:  table "etl_log" does not exist, skipping
+DROP TABLE
+Step 5: Creating YMatrix schema...
+  Running 01_init.sql...
+CREATE EXTENSION
+CREATE TABLE
+INSERT 0 1096
+CREATE TABLE
+  Running 02_ods.sql...
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+  Running 03_dim.sql...
+CREATE TABLE
+INSERT 0 10
+CREATE TABLE
+INSERT 0 3
+CREATE TABLE
+CREATE TABLE
+  Running 03_dwd.sql...
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+  Running 04_dws.sql...
+SELECT 0
+SELECT 0
+SELECT 0
+SELECT 0
+SELECT 0
+psql:/docker-entrypoint-initdb.d/04_dws.sql:44: NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'paid_to_shipped_hours' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT 1
+SELECT 0
+  Running 05_ads.sql...
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+  Running 06_fdw.sql...
+psql:/docker-entrypoint-initdb.d/06_fdw.sql:9: NOTICE:  mysql_fdw is unavailable in this image; skipping optional FDW showcase
+DO
+Step 6: ETL pipeline...
+==================================================
+YMatrix DW Demo - Full ETL Pipeline
+==================================================
+
+[1/6] Extract...
+Extracting users...
+  -> 10000 rows
+Extracting products...
+  -> 500 rows
+Extracting orders...
+  -> 200000 rows
+Extracting order_items...
+  -> 483200 rows
+Extracting payments...
+  -> 189956 rows
+Extracting order_status_events...
+  -> 699451 rows
+  1583107 rows in 14266ms
+
+[2/6] Transform...
+Transform users: 10000 rows (dropped 0)
+Transform products: 500 rows (dropped 0)
+Transform orders: 200000 rows (dropped 0)
+Transform order_items: 483200 rows (dropped 0)
+Transform payments: 189956 rows (dropped 0)
+Transform order_status_events: 699451 rows (dropped 0)
+
+[3/6] Load ODS...
+Loading users -> ods_users via mxgate...
+  -> 10000 rows
+Loading products -> ods_products via mxgate...
+  -> 500 rows
+Loading orders -> ods_orders via mxgate...
+TRUNCATE TABLE
+INSERT 0 8000000
+  -> 200000 rows
+Loading order_items -> ods_order_items via mxgate...
+  -> 483200 rows
+Loading payments -> ods_payments via mxgate...
+  -> 189956 rows
+Loading order_status_events -> ods_order_status_events via mxgate...
+  -> 699451 rows
+
+[4/6] Load DIM...
+dim_product: 500 rows, dim_user: 10000 rows
+
+[5/6] DWD ETL + Refresh...
+dwd_order_fact: 200000 rows (3050ms)
+dwd_order_detail_fact: 483200 rows (2957ms)
+dwd_order_status_event_fact: 699451 rows (2023ms)
+DWS materialized views refreshed (3219ms)
+
+[6/6] Verify...
+
+--- Verifying ADS Metrics ---
+  ads_daily_gmv: 365 rows -> PASS
+  Nov 11: 140425396.16 vs avg: 2852071 -> PASS
+  top_products: 10 rows -> PASS
+  category pct: 100.00% -> PASS
+  repurchase: 45.77% -> PASS
+  gmv_by_region: 9 rows -> PASS
+  promo_compare: 2 non-empty periods -> PASS
+  user_segment: 3 segments -> PASS
+  compression: MARS3 saves 83.2% -> PASS
+  etl_log: 8 entries -> PASS
+  ods_orders equals configured scale 200000 rows -> PASS
+  order_items 2x to 5x orders 483200 rows -> PASS
+  Nov 11 >= 50x normal daily average 33816 vs 456.55 -> PASS
+  status events present 699451 rows -> PASS
+  order item count varies 200000 non-four-item orders -> PASS
+  product dimension credible 0 invalid products -> PASS
+  order/detail amount reconciles 0 mismatches -> PASS
+  minute traffic non-empty 123890 rows -> PASS
+  running GMV non-empty 1427 rows -> PASS
+  running GMV monotonic 0 violations -> PASS
+  DWD timezone date aligned 0 shifted rows -> PASS
+
+21/21 passed
+  [PASS] ads_daily_gmv: 365 days
+  [PASS] Nov 11 peak > 2x avg
+  [PASS] ads_top_products: 10 rows
+  [PASS] category pct = 100%
+  [PASS] repurchase >= 30%
+  [PASS] gmv_by_region: >= 5 provinces
+  [PASS] promo_compare: 2 non-empty periods
+  [PASS] user_segment: 3 segments
+  [PASS] compression: MARS3 saves >= 50%
+  [PASS] etl_log: >= 7 entries
+  [PASS] ods_orders equals configured scale
+  [PASS] order_items 2x to 5x orders
+  [PASS] Nov 11 >= 50x normal daily average
+  [PASS] status events present
+  [PASS] order item count varies
+  [PASS] product dimension credible
+  [PASS] order/detail amount reconciles
+  [PASS] minute traffic non-empty
+  [PASS] running GMV non-empty
+  [PASS] running GMV monotonic
+  [PASS] DWD timezone date aligned
+
+==================================================
+ETL Complete: 66997ms
+Grafana: http://localhost:3000 (admin/admin)
+==================================================
+Step 7: Verification...
+
+--- Verifying ADS Metrics ---
+  ads_daily_gmv: 365 rows -> PASS
+  Nov 11: 140425396.16 vs avg: 2852071 -> PASS
+  top_products: 10 rows -> PASS
+  category pct: 100.00% -> PASS
+  repurchase: 45.77% -> PASS
+  gmv_by_region: 9 rows -> PASS
+  promo_compare: 2 non-empty periods -> PASS
+  user_segment: 3 segments -> PASS
+  compression: MARS3 saves 83.2% -> PASS
+  etl_log: 9 entries -> PASS
+  ods_orders equals configured scale 200000 rows -> PASS
+  order_items 2x to 5x orders 483200 rows -> PASS
+  Nov 11 >= 50x normal daily average 33816 vs 456.55 -> PASS
+  status events present 699451 rows -> PASS
+  order item count varies 200000 non-four-item orders -> PASS
+  product dimension credible 0 invalid products -> PASS
+  order/detail amount reconciles 0 mismatches -> PASS
+  minute traffic non-empty 123890 rows -> PASS
+  running GMV non-empty 1427 rows -> PASS
+  running GMV monotonic 0 violations -> PASS
+  DWD timezone date aligned 0 shifted rows -> PASS
+
+21/21 passed
+=== All Done ===
+Grafana: http://localhost:3000 (admin/admin)

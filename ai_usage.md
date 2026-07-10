@@ -11,9 +11,33 @@
 
 ### 设计阶段（Codex）
 ```
-[提供了 YMatrix SKILL.md 和现有设计文档]
-帮我看当前的设计还有什么遗漏？
-输出: 27 条遗漏清单，按 7 类分，含阻塞级 3 条
+背景 ：客⼾希望理解 YMatrix 在数仓场景中的完整使⽤⽅式。请实现⼀个从业务库到数仓分层再到报表展⽰ 
+的最⼩ Demo。
+现在需要你理解YMatrix 的官方文档https://ymatrix.cn/zh/doc/5.2，总结出一个skill，以便我进行demo的开发。
+
+[$superpowers:brainstorming](C:\\Users\\82044\\.codex\\plugins\\cache\\openai-api-curated\\superpowers\\d6169bef\\skills\\brainstorming\\SKILL.md) 目标：完成数仓端到端 Demo
+背景：客⼾希望理解 YMatrix 在数仓场景中的完整使⽤⽅式。请实现⼀个从业务库到数仓分层再到报表展⽰的最⼩ Demo。
+要求：1. 构造⼀个业务数据库场景。建议使⽤电商场景，包含：users、products、orders、order_items、payments
+2. 实现数据同步。从 MySQL 或其他业务库同步到 YMatrix。⼯具不限：DataX、Flink CDC、⾃写脚本、其他开源⼯具
+3. 在 YMatrix 中完成数仓分层。⾄少包含：ODS：原始同步层、DWD：清洗明细层、DWS：汇总层、ADS：应⽤报表层
+4. ⾄少实现 5 个业务指标。
+⽰例：每⽇ GMV、每⽇订单数、商品销售 Top 10、⽤⼾复购率、品类销售占⽐
+5. 提供展⽰⽅式。可以是：SQL 查询结果、Markdown 报告、Grafana / Superset、简单 Web ⻚⾯、截图。
+需要有：
+1. Git 仓库地址，或压缩包
+2. README.md
+3. report.md
+4. ai_usage.md
+5. 运⾏结果截图或⽇志。如使⽤外部服务、Docker、数据库或特殊依赖，请在 README 中说明。
+
+目前的分层要加入DIM层
+ODS（原始层）→ DWD（明细层）→ DWS（汇总层）→ ADS（应用层）
+                              ↑
+                           DIM（维表层）
+如果有地区维度表，可以按省→市→区下钻分析 GMV 分布，展示 YMatrix 的多维度分析能力。日志/审计表 etl_log
+需要针对真实电商业务场景设计表？例如双11大促
+
+数据特征和表结构不对，表结构 中少了dim_date 、dim_region
 ```
 
 ### Plan 执行阶段（DimCode）
@@ -23,27 +47,41 @@
 先确认当前修改到哪一步。
 ```
 
-### 跨平台问题诊断（DimCode）
-```
-mxgate loaded 0 of 1000 rows into ods_users
-all 1000 first rows in this segment were rejected
-→ 诊断: Windows CRLF 行尾导致 mxgate 解析失败
-→ 修复: csv.writer lineterminator="\n" + .gitattributes eol=lf
+### 问题指正与修改
+
+[$superpowers:verification-before-completion](C:\\Users\\82044\\.codex\\plugins\\cache\\openai-api-curated\\superpowers\\d6169bef\\skills\\verification-before-completion\\SKILL.md) 你来帮我进行全流程测试，遇到问题查日志检查，记录到md文档中。
+
+你来帮我进行全流程测试，遇到问题查日志检查，记录到md文档中。
+[$superpowers:systematic-debugging](C:\\Users\\82044\\.codex\\plugins\\cache\\openai-api-curated\\superpowers\\d6169bef\\skills\\systematic-debugging\\SKILL.md) 根据测试报告修bug
+
+[$superpowers:brainstorming](C:\\Users\\82044\\.codex\\plugins\\cache\\openai-api-curated\\superpowers\\d6169bef\\skills\\brainstorming\\SKILL.md) 查看当前的项目，生成的数据合理吗？是不是会生成偏差（例如商品是食品但品牌是美妆）指标正确吗？能完成向客户展示YMatrix 在数仓场景中的完整使⽤⽅式的目标吗？
+
+1.缺少YMatrix 最核心的时序分析能力（如 time_bucket 函数、滑动窗口、毫秒级精度查询？例如将所有时间字段改为 TIMESTAMP（精确到秒甚至毫秒）。
+2.数据一致性：订单价与商品价脱钩。 order_items 的 unit_price 是随机生成的（19.9~9999），与 products 表中的 price 没有任何关联。这会导致数仓 DWS 层在做“按商品品类统计GMV”时，数据逻辑出现混乱。保证数仓中“事实表”与“维度表”的外键一致性。
+3.模拟流量爆发：订单分布过于均匀
+脚本中除了双11前后，其余日期的订单量几乎是平均分配的（random.choice）。真实的电商场景在双11当天（第316天）的订单量应该是平日的 50 倍以上。
+
+改进方案：给日期分配权重。例如：平日权重为1，双11当天（Day 316）权重设为100，预热期（Day 306-315）权重设为5。
+演示价值：证明 YMatrix 能够轻松应对流量洪峰下的数据写入和实时查询压力。
+4.订单商品数量：固定为4个不真实 ，，现实中用户可能买1件，也可能买20件。固定写死 for _ in range(4) 会让客户觉得数据很“假”。 改进方案：使用泊松分布或自定义权重随机生成 item_count。例如：random.choices([1,2,3,5,10], weights=[50,30,10,8,2])[0]。
+5. 数据动态流转：缺少“状态变更流”当前 orders 的 status 是一次性生成的最终状态。实际业务中，订单会从 paid -> shipped -> completed 历经数天。
+
+1.将订单数（num）提升至 100万 ~ 500万。对应的 order_items 明细行约为 300万 ~ 1500万行。生成脚本改为流式写入 CSV 文件，然后通过 mxgate 并行导入 MySQL业务库
+2.评估order_date 改名为 order_time 的迁移成本，在 YMatrix 的 DWD 层 进行强类型转换和重命名是否更好？
+3.orders.total 与 order_items.final_price 的对账逻辑缺失
+4.新增 ADS 视图：ads_gmv_running_total（双11当日累计 GMV 趋势）。
+
+
+
 ```
 
-### 时区问题诊断（DimCode）
-```
-no partition of relation "dwd_order_fact" found for row
-Partition key (order_date) = (2023-12-31)
-→ 诊断: TIMESTAMP(3) 无时区列 + AT TIME ZONE 导致 UTC 偏移
-→ 修复: ODS 时间已是本地时间，直接使用不做时区转换
-```
+
 
 ## 3. AI 帮助完成了哪些部分
 
 | 模块 | AI 参与程度 | 说明 |
 |------|-----------|------|
-| 架构设计 | 100% | 五层数仓架构、MySQL 电商场景、YMatrix 特性选型 |
+| 架构设计 | 80% | 五层数仓架构、MySQL 电商场景、YMatrix 特性选型 |
 | DDL SQL (9 个 init 文件) | 90% | MARS3/HEAP 双引擎、RANGE 分区、物化视图、ADS 视图 |
 | Python ETL (7 个脚本) | 85% | mxgate 加载、pandas 清洗、SQL INSERT..SELECT、验证脚本 |
 | 数据生成 (gen_data.py) | 100% | 可信电商数据：5 品类 25 品牌、双11加权流量、状态事件流 |

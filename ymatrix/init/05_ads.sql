@@ -10,12 +10,17 @@ CREATE VIEW ads_user_repurchase AS
 SELECT COUNT(*)FILTER(WHERE total_orders>1)*100.0/COUNT(*)repurchase_rate,
   COUNT(*)FILTER(WHERE total_orders>1)repeat_buyers,COUNT(*)total_buyers FROM dws_user_purchase_stats;
 CREATE VIEW ads_user_segment AS
-WITH ranked AS (
-  SELECT user_id,total_orders,total_spent,NTILE(3) OVER(ORDER BY total_spent)spend_tier
-  FROM dws_user_purchase_stats
-)
-SELECT CASE spend_tier WHEN 1 THEN 'low' WHEN 2 THEN 'mid' ELSE 'high' END segment,
-  COUNT(*)user_count,SUM(total_orders)total_orders FROM ranked GROUP BY 1 ORDER BY 1;
+SELECT
+  CASE
+    WHEN total_spent >= 300000 THEN 'high'
+    WHEN total_spent >= 10000 THEN 'mid'
+    ELSE 'low'
+  END segment,
+  COUNT(*)user_count,
+  SUM(total_orders)total_orders
+FROM dws_user_purchase_stats
+GROUP BY 1
+ORDER BY 1;
 CREATE VIEW ads_gmv_by_region AS
 SELECT r.province,COUNT(DISTINCT f.order_id)order_cnt,SUM(f.total_amount)gmv
   FROM dwd_order_fact f JOIN dim_region r ON f.region_id=r.region_id GROUP BY r.province ORDER BY gmv DESC;

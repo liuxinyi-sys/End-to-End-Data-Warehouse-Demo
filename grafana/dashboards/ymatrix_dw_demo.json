@@ -4,12 +4,17 @@
   "panels": [
     {
       "id": 1,
-      "title": "每日 GMV 趋势",
+      "title": "每日 GMV / 订单数趋势",
       "type": "timeseries",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
       "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
-      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT dt AS time, gmv FROM ads_daily_gmv ORDER BY dt", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
-      "fieldConfig": {"defaults": {"unit": "currencyCNY", "custom": {"lineInterpolation": "smooth"}}}
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT dt AS time, gmv AS \"GMV\", order_count AS \"订单数\" FROM ads_daily_gmv ORDER BY dt", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "fieldConfig": {
+        "defaults": {"unit": "currencyCNY", "custom": {"lineInterpolation": "smooth"}},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "订单数"}, "properties": [{"id": "unit", "value": "short"}, {"id": "custom.axisPlacement", "value": "right"}]}
+        ]
+      }
     },
     {
       "id": 2,
@@ -25,7 +30,7 @@
       "type": "piechart",
       "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
       "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
-      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT category AS metric, revenue AS value FROM ads_category_sales ORDER BY revenue DESC", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT SUM(revenue) FILTER (WHERE category='电子') AS \"电子\", SUM(revenue) FILTER (WHERE category='美妆') AS \"美妆\", SUM(revenue) FILTER (WHERE category='服装') AS \"服装\", SUM(revenue) FILTER (WHERE category='家居') AS \"家居\", SUM(revenue) FILTER (WHERE category='食品') AS \"食品\" FROM ads_category_sales", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
       "options": {"pieType": "pie", "displayLabels": ["percent", "name"], "labels": {"name": "metric"}}
     },
     {
@@ -49,19 +54,25 @@
       "id": 6,
       "title": "双11 累计 GMV",
       "type": "timeseries",
+      "timeFrom": "2024-11-11T00:00:00.000Z",
+      "timeTo": "2024-11-11T23:59:59.999Z",
+      "hideTimeOverride": false,
       "gridPos": {"h": 5, "w": 12, "x": 12, "y": 8},
       "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
-      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT bucket_time AS time, running_gmv, minute_gmv FROM ads_gmv_running_total ORDER BY bucket_time", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
-      "fieldConfig": {"defaults": {"unit": "currencyCNY", "custom": {"lineInterpolation": "smooth"}}}
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT bucket_time AS time, running_gmv AS \"累计GMV\", minute_gmv AS \"分钟GMV\" FROM ads_gmv_running_total WHERE bucket_time >= TIMESTAMP '2024-11-11 00:00:00' AND bucket_time < TIMESTAMP '2024-11-12 00:00:00' ORDER BY bucket_time", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "fieldConfig": {"defaults": {"unit": "currencyCNY", "custom": {"axisLabel": "GMV", "lineInterpolation": "smooth"}}}
     },
     {
       "id": 7,
       "title": "双11 累计订单量",
       "type": "timeseries",
+      "timeFrom": "2024-11-11T00:00:00.000Z",
+      "timeTo": "2024-11-11T23:59:59.999Z",
+      "hideTimeOverride": false,
       "gridPos": {"h": 5, "w": 12, "x": 0, "y": 13},
       "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
-      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT bucket_time AS time, running_order_count, minute_order_count FROM ads_gmv_running_total ORDER BY bucket_time", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
-      "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineInterpolation": "smooth"}}}
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT bucket_time AS time, running_order_count AS \"累计订单\", minute_order_count AS \"分钟订单\" FROM ads_gmv_running_total WHERE bucket_time >= TIMESTAMP '2024-11-11 00:00:00' AND bucket_time < TIMESTAMP '2024-11-12 00:00:00' ORDER BY bucket_time", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"axisLabel": "订单数", "lineInterpolation": "smooth"}}}
     },
     {
       "id": 8,
@@ -78,7 +89,7 @@
       "type": "bargauge",
       "gridPos": {"h": 5, "w": 3, "x": 18, "y": 13},
       "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
-      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT period, daily_avg_gmv FROM ads_promo_compare", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT MAX(daily_avg_gmv) FILTER (WHERE period='normal') AS \"日常期日均GMV\", MAX(daily_avg_gmv) FILTER (WHERE period='promo') AS \"促销期日均GMV\" FROM ads_promo_compare", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
       "options": {"orientation": "vertical", "showUnfilled": true},
       "fieldConfig": {"defaults": {"unit": "currencyCNY"}}
     },
@@ -88,17 +99,20 @@
       "type": "piechart",
       "gridPos": {"h": 5, "w": 3, "x": 21, "y": 13},
       "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
-      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT segment AS metric, user_count AS value FROM ads_user_segment ORDER BY segment", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT SUM(user_count) FILTER (WHERE segment='low') AS \"低价值用户\", SUM(user_count) FILTER (WHERE segment='mid') AS \"中价值用户\", SUM(user_count) FILTER (WHERE segment='high') AS \"高价值用户\" FROM ads_user_segment", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
       "options": {"pieType": "donut", "displayLabels": ["percent", "name"], "labels": {"name": "metric"}}
     },
     {
       "id": 11,
       "title": "双11 分钟级流量",
       "type": "timeseries",
+      "timeFrom": "2024-11-11T00:00:00.000Z",
+      "timeTo": "2024-11-11T23:59:59.999Z",
+      "hideTimeOverride": false,
       "gridPos": {"h": 6, "w": 12, "x": 0, "y": 18},
       "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
-      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT bucket_time AS time, minute_order_count FROM ads_minute_traffic WHERE bucket_time >= TIMESTAMP '2024-11-11 00:00:00' AND bucket_time < TIMESTAMP '2024-11-12 00:00:00' ORDER BY bucket_time", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
-      "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineInterpolation": "smooth"}}}
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT bucket_time AS time, minute_order_count AS \"分钟订单\" FROM ads_minute_traffic WHERE bucket_time >= TIMESTAMP '2024-11-11 00:00:00' AND bucket_time < TIMESTAMP '2024-11-12 00:00:00' ORDER BY bucket_time", "format": "time_series", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"axisLabel": "订单数/分钟", "lineInterpolation": "smooth"}}}
     },
     {
       "id": 12,
@@ -106,7 +120,7 @@
       "type": "stat",
       "gridPos": {"h": 6, "w": 4, "x": 12, "y": 18},
       "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"},
-      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT ROUND(paid_to_shipped_hours, 1) AS \"付款到发货\", ROUND(shipped_to_completed_hours, 1) AS \"发货到完成\" FROM ads_order_fulfillment_latency", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
+      "targets": [{"refId": "A", "rawQuery": true, "rawSql": "SELECT ROUND(paid_to_shipped_hours::numeric, 1) AS \"付款到发货\", ROUND(shipped_to_completed_hours::numeric, 1) AS \"发货到完成\" FROM ads_order_fulfillment_latency", "format": "table", "datasource": {"type": "grafana-postgresql-datasource", "uid": "ymatrix-dw-demo"}}],
       "fieldConfig": {"defaults": {"unit": "h", "color": {"mode": "thresholds"}, "thresholds": {"steps": [{"value": 0, "color": "green"}, {"value": 48, "color": "yellow"}, {"value": 96, "color": "red"}]}}}
     },
     {
